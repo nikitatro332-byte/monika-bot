@@ -19,3 +19,5 @@ nssm.exe.zip
 _render_*.py
 _test_*.py
 _check_*.py
+_download_*.py
+_uptime_*.py
