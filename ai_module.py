@@ -426,51 +426,28 @@ class AIEngine:
         r.raise_for_status()
         return r.json().get("text", "")
 
-    # ===== TTS (TTS.quest VoiceVox v2 → gTTS fallback) =====
+    # ===== TTS (edge-tts → gTTS fallback) =====
     async def tts_realistic(self, text, filename=None, as_ogg=True):
-        """Генерирует голос через TTS.quest VoiceVox v2 → gTTS fallback."""
+        """Генерирует голос через edge-tts (человеческий) → gTTS fallback."""
         safe_name = filename or f"voice_{uuid.uuid4().hex}"
         base_dir = os.path.dirname(os.path.abspath(__file__))
         mp3_path = os.path.join(base_dir, f"{safe_name}.mp3")
         out_path = os.path.join(base_dir, f"{safe_name}.ogg")
 
-        # 1) TTS.quest VoiceVox v2 — прямой GET запрос
-        tts_key = os.environ.get("TTS_API_KEY", "x14_3-a5p-72M62")
+        # 1) edge-tts — человеческий голос (работает на Render в США)
         try:
-            import requests as req
-            import urllib.parse
-
-            # VoiceVox параметры
-            speaker = 3        # Zundamon Normal
-            pitch = 0          # высота тона
-            intonation_scale = 1.0  # интонация
-            speed = 1.0        # скорость речи
-
-            # Формируем URL
-            params = {
-                "key": tts_key,
-                "speaker": speaker,
-                "pitch": pitch,
-                "intonationScale": intonation_scale,
-                "speed": speed,
-                "text": text
-            }
-
-            r = req.get(
-                "https://deprecatedapis.tts.quest/v2/voicevox/audio/",
-                params=params,
-                timeout=30
+            import edge_tts
+            communicate = edge_tts.Communicate(
+                text, "ru-RU-SvetlanaNeural",
+                rate="-8%", pitch="-3Hz"
             )
-
-            if r.status_code == 200 and len(r.content) > 500:
-                with open(mp3_path, "wb") as f:
-                    f.write(r.content)
-                print(f"🎤 TTS.quest VoiceVox OK: {os.path.getsize(mp3_path)} bytes")
+            await communicate.save(mp3_path)
+            if os.path.exists(mp3_path) and os.path.getsize(mp3_path) > 500:
+                print(f"🎤 edge-tts OK: {os.path.getsize(mp3_path)} bytes")
             else:
-                print(f"⚠️ TTS.quest: {r.status_code} — {r.text[:200]}")
-                raise Exception("TTS.quest failed")
+                raise Exception("пустой файл")
         except Exception as e:
-            print(f"⚠️ TTS.quest: {e}")
+            print(f"⚠️ edge-tts: {e}")
 
         # 2) gTTS fallback
         if not os.path.exists(mp3_path) or os.path.getsize(mp3_path) < 500:
@@ -480,7 +457,7 @@ class AIEngine:
                 tts.save(mp3_path)
                 if not os.path.exists(mp3_path) or os.path.getsize(mp3_path) < 500:
                     raise Exception("gTTS вернул пустой файл")
-                print(f"🎤 gTTS OK: {os.path.getsize(mp3_path)} bytes")
+                print(f"🎤 gTTS fallback: {os.path.getsize(mp3_path)} bytes")
             except Exception as e:
                 print(f"⚠️ gTTS: {e}")
                 return None
