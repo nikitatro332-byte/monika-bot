@@ -133,6 +133,13 @@ class Memory:
         except:
             return 999
 
+    def set_chat_id(self, chat_id):
+        self.data["chat_id"] = chat_id
+        self.save()
+
+    def get_chat_id(self):
+        return self.data.get("chat_id")
+
     def add_proactive(self, text):
         self.data.setdefault("proactive_sent", []).append({
             "time": datetime.now().strftime("%d.%m %H:%M"),
@@ -381,7 +388,7 @@ class Mind:
         self.memory = memory
         self.personality = personality
         self.bot_app = None
-        self.chat_id = None
+        self.chat_id = memory.get_chat_id()  # Восстанавливаем из файла
         self.event_loop = None
         self.running = False
         self.thread = None
@@ -396,8 +403,8 @@ class Mind:
         self.running = False
 
     def _loop(self):
-        # Первый запуск — подождать 5 минут
-        initial_wait = 300
+        # Первый запуск — подождать 2 минуты
+        initial_wait = 120
         for _ in range(initial_wait):
             if not self.running:
                 return
@@ -769,7 +776,9 @@ def process_message(text):
 # =====================================================
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    mind.chat_id = update.effective_chat.id
+    chat_id = update.effective_chat.id
+    mind.chat_id = chat_id
+    memory.set_chat_id(chat_id)
     name = memory.get_name()
     greeting = "💖 Привет! Я Моника!" if not name else f"💖 Привет, {name}! Я соскучилась!"
     await update.message.reply_text(
@@ -834,7 +843,9 @@ async def cmd_personality(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    mind.chat_id = update.effective_chat.id
+    chat_id = update.effective_chat.id
+    mind.chat_id = chat_id
+    memory.set_chat_id(chat_id)
     user_text = update.message.text
     print(f"💬 [{datetime.now().strftime('%H:%M')}] {user_text[:50]}")
     reply = process_message(user_text)
