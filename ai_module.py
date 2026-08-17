@@ -426,24 +426,47 @@ class AIEngine:
         r.raise_for_status()
         return r.json().get("text", "")
 
-    # ===== TTS (gTTS → OGG Opus) =====
+    # ===== TTS (Fish Audio → gTTS fallback) =====
     async def tts_realistic(self, text, filename=None, as_ogg=True):
-        """Генерирует голос и конвертирует в OGG Opus (для Telegram voice)."""
+        """Генерирует голос через Fish Audio (клонирование) → gTTS fallback."""
         safe_name = filename or f"voice_{uuid.uuid4().hex}"
         base_dir = os.path.dirname(os.path.abspath(__file__))
         mp3_path = os.path.join(base_dir, f"{safe_name}.mp3")
         out_path = os.path.join(base_dir, f"{safe_name}.ogg")
 
-        try:
-            from gtts import gTTS
-            tts = gTTS(text=text, lang="ru", tld="com", slow=False)
-            tts.save(mp3_path)
-            if not os.path.exists(mp3_path) or os.path.getsize(mp3_path) < 500:
-                raise Exception("gTTS вернул пустой файл")
-            print(f"🎤 gTTS OK: {os.path.getsize(mp3_path)} bytes")
-        except Exception as e:
-            print(f"⚠️ gTTS: {e}")
-            return None
+        # 1) Fish Audio — клонирование голоса
+        fish_key = os.environ.get("FISH_AUDIO_API_KEY", "")
+        if fish_key:
+            try:
+                import requests as req
+                r = req.post(
+                    "https://api.fish.audio/v1/tts",
+                    headers={"Authorization": f"Bearer {fish_key}", "Content-Type": "application/json"},
+                    json={"text": text, "reference_id": None},
+                    timeout=30
+                )
+                if r.status_code == 200:
+                    with open(mp3_path, "wb") as f:
+                        f.write(r.content)
+                    if os.path.exists(mp3_path) and os.path.getsize(mp3_path) > 500:
+                        print(f"🎤 Fish Audio OK: {os.path.getsize(mp3_path)} bytes")
+                else:
+                    print(f"⚠️ Fish Audio: {r.status_code} — {r.text[:200]}")
+            except Exception as e:
+                print(f"⚠️ Fish Audio: {e}")
+
+        # 2) gTTS fallback
+        if not os.path.exists(mp3_path) or os.path.getsize(mp3_path) < 500:
+            try:
+                from gtts import gTTS
+                tts = gTTS(text=text, lang="ru", tld="com", slow=False)
+                tts.save(mp3_path)
+                if not os.path.exists(mp3_path) or os.path.getsize(mp3_path) < 500:
+                    raise Exception("gTTS вернул пустой файл")
+                print(f"🎤 gTTS OK: {os.path.getsize(mp3_path)} bytes")
+            except Exception as e:
+                print(f"⚠️ gTTS: {e}")
+                return None
 
         if as_ogg and os.path.exists(mp3_path):
             try:
