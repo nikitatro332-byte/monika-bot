@@ -1118,11 +1118,23 @@ async def _send_photo_bytes(update, photo_bytes, caption):
 
 
 async def _send_voice_bytes(update, voice_bytes, caption=None):
-    """Отправляет голосовое в чат."""
-    kwargs = {"voice": io.BytesIO(voice_bytes)}
-    if caption:
-        kwargs["caption"] = caption
-    await update.message.reply_voice(**kwargs)
+    """Отправляет голосовое в чат. Если sendVoice не сработал — отправляет как аудио."""
+    try:
+        # Передаём имя файла .ogg, чтобы Telegram принял как голосовое
+        voice_file = io.BytesIO(voice_bytes)
+        voice_file.name = "voice.ogg"
+        await update.message.reply_voice(voice=voice_file, caption=caption)
+        return True
+    except Exception as e:
+        print(f"⚠️ sendVoice: {e} — пробую как аудио")
+        try:
+            audio_file = io.BytesIO(voice_bytes)
+            audio_file.name = "voice.mp3"
+            await update.message.reply_audio(audio=audio_file, caption=caption)
+            return True
+        except Exception as e2:
+            print(f"⚠️ sendAudio тоже не сработал: {e2}")
+            return False
 
 
 
@@ -1142,7 +1154,9 @@ async def dispatch_reply(update, reply, user_text=""):
             voice_file = await asyncio.to_thread(engine.tts_realistic, voice_text)
             with open(voice_file, "rb") as f:
                 voice_bytes = f.read()
-            await _send_voice_bytes(update, voice_bytes, voice_text)
+            sent = await _send_voice_bytes(update, voice_bytes, voice_text)
+            if not sent:
+                await update.message.reply_text(voice_text)
             os.remove(voice_file)
         except Exception as e:
             print(f"⚠️ TTS: {e}")
@@ -1236,12 +1250,14 @@ async def dispatch_reply(update, reply, user_text=""):
         clean_reply = reply
         for tag in ["[ГОЛОС]", "[голос]", "[VOICE]", "[voice]"]:
             clean_reply = clean_reply.replace(tag, "")
-        clean_reply = clean_reply.strip()
+        clean_reply = _clean_command_prefixes(clean_reply)
         try:
             voice_file = await asyncio.to_thread(engine.tts_realistic, clean_reply)
             with open(voice_file, "rb") as f:
                 voice_bytes = f.read()
-            await _send_voice_bytes(update, voice_bytes)
+            sent = await _send_voice_bytes(update, voice_bytes)
+            if not sent:
+                await update.message.reply_text(clean_reply)
             os.remove(voice_file)
             return
         except Exception as e:

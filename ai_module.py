@@ -426,51 +426,67 @@ class AIEngine:
         r.raise_for_status()
         return r.json().get("text", "")
 
-    # ===== Реалистичный женский TTS (edge-tts → gTTS) =====
-    def tts_realistic(self, text, filename=None):
+    # ===== Реалистичный женский TTS (gTTS → edge-tts, с конвертацией в OGG) =====
+    def tts_realistic(self, text, filename=None, as_ogg=True):
         """
-        Генерирует женский голос.
-        Приоритет: edge-tts (SvetlanaNeural) → gTTS fallback.
-        Безопасен в async-контексте — edge-tts пропускается, если asyncio.run() недоступен.
+        Генерирует женский голос и конвертирует в OGG Opus (для Telegram voice).
+        Приоритет: gTTS (проверенный, работает везде) → edge-tts (реалистичный, если доступен).
+        Возвращает путь к файлу (.ogg).
         """
-        safe_name = filename or f"voice_{uuid.uuid4().hex}.mp3"
+        safe_name = filename or f"voice_{uuid.uuid4().hex}"
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        out_path = os.path.join(base_dir, safe_name)
+        mp3_path = os.path.join(base_dir, f"{safe_name}.mp3")
+        out_path = os.path.join(base_dir, f"{safe_name}.ogg")
 
-        # 1) edge-tts — только если НЕ внутри async-контекста
         try:
-            asyncio.get_running_loop()
-            in_async = True
-        except RuntimeError:
-            in_async = False
-
-        if not in_async:
+            # 1) gTTS — надёжный, работает в РФ и на Render
+            from gtts import gTTS
+            tts = gTTS(text=text, lang="ru", tld="com")
+            tts.save(mp3_path)
+            if not os.path.exists(mp3_path) or os.path.getsize(mp3_path) < 500:
+                raise Exception("gTTS вернул пустой файл")
+            print(f"🎤 gTTS OK: {os.path.getsize(mp3_path)} bytes")
+        except Exception as e:
+            print(f"⚠️ gTTS: {e}")
+            # 2) edge-tts — только если НЕ внутри async-контекста
             try:
-                import edge_tts
-                import asyncio
+                asyncio.get_running_loop()
+                in_async = True
+            except RuntimeError:
+                in_async = False
 
-                async def _synthesize():
-                    communicate = edge_tts.Communicate(
-                        text, "ru-RU-SvetlanaNeural",
-                        rate="-8%", pitch="-3Hz"
-                    )
-                    await communicate.save(out_path)
+            if not in_async:
+                try:
+                    import edge_tts
+                    async def _synthesize():
+                        communicate = edge_tts.Communicate(
+                            text, "ru-RU-SvetlanaNeural", rate="-8%", pitch="-3Hz"
+                        )
+                        await communicate.save(mp3_path)
 
-                asyncio.run(_synthesize())
-                if os.path.exists(out_path) and os.path.getsize(out_path) > 1000:
+                    asyncio.run(_synthesize())
+                    print(f"🎤 edge-tts OK: {os.path.getsize(mp3_path)} bytes")
+                except Exception as e2:
+                    print(f"⚠️ edge-tts тоже упал: {e2}")
+
+        if as_ogg and os.path.exists(mp3_path):
+            try:
+                import imageio_ffmpeg
+                import subprocess
+                ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+                cmd = [ffmpeg, "-y", "-i", mp3_path, "-c:a", "libopus", "-b:a", "48k", out_path]
+                r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+                if r.returncode == 0 and os.path.exists(out_path):
+                    print(f"🎤 Конвертировано в OGG: {os.path.getsize(out_path)} bytes")
+                    os.remove(mp3_path)
                     return out_path
+                else:
+                    print(f"⚠️ Конвертация не удалась: {r.stderr[-200:]}")
             except Exception as e:
-                print(f"⚠️ edge-tts ошибка: {e}")
+                print(f"⚠️ ffmpeg: {e}")
 
-        # 2) Надёжный fallback
-        return self._tts_fallback(text, out_path)
-
-    def _tts_fallback(self, text, out_path):
-        """Fallback TTS через gTTS."""
-        from gtts import gTTS
-        tts = gTTS(text=text, lang="ru", tld="com")
-        tts.save(out_path)
-        return out_path
+        # Если конвертация не удалась — возвращаем MP3
+        return mp3_path if os.path.exists(mp3_path) else None
 
     # ===== Генерация фото Моники (DDLC style) =====
     def generate_monika_photo(self, mood="casual", filename="monika_generated.png"):
