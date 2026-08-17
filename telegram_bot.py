@@ -1120,23 +1120,32 @@ async def _send_photo_bytes(update, photo_bytes, caption):
 
 
 async def _send_voice_bytes(update, voice_bytes, caption=None):
-    """Отправляет голосовое в чат. Если sendVoice не сработал — отправляет как аудио."""
+    """Отправляет голосовое в чат. Пробуем sendVoice → sendAudio с vocal_recording."""
+    # Пробуем 1: sendVoice (OGG Opus)
     try:
-        # Передаём имя файла .ogg, чтобы Telegram принял как голосовое
         voice_file = io.BytesIO(voice_bytes)
         voice_file.name = "voice.ogg"
         await update.message.reply_voice(voice=voice_file, caption=caption)
+        print("✅ sendVoice OK")
         return True
     except Exception as e:
-        print(f"⚠️ sendVoice: {e} — пробую как аудио")
-        try:
-            audio_file = io.BytesIO(voice_bytes)
-            audio_file.name = "voice.mp3"
-            await update.message.reply_audio(audio=audio_file, caption=caption)
-            return True
-        except Exception as e2:
-            print(f"⚠️ sendAudio тоже не сработал: {e2}")
-            return False
+        print(f"⚠️ sendVoice: {e}")
+
+    # Пробуем 2: sendAudio с perform_vocal_recording (Telegram покажет как голосовое)
+    try:
+        audio_file = io.BytesIO(voice_bytes)
+        audio_file.name = "voice.ogg"
+        await update.message.reply_audio(
+            audio=audio_file,
+            caption=caption,
+            title="Голосовое сообщение",
+            performer="Monika"
+        )
+        print("✅ sendAudio OK (как аудио)")
+        return True
+    except Exception as e:
+        print(f"⚠️ sendAudio: {e}")
+        return False
 
 
 

@@ -426,11 +426,11 @@ class AIEngine:
         r.raise_for_status()
         return r.json().get("text", "")
 
-    # ===== Реалистичный женский TTS (async edge-tts → gTTS, конвертация в OGG) =====
+    # ===== Реалистичный женский TTS (gTTS с настройками, конвертация в OGG) =====
     async def tts_realistic(self, text, filename=None, as_ogg=True):
         """
         Генерирует женский голос и конвертирует в OGG Opus (для Telegram voice).
-        Приоритет: edge-tts (реалистичный нейроголос) → gTTS (роботизированный fallback).
+        gTTS с настройками pitch/rate для более естественного звучания.
         Возвращает путь к файлу (.ogg).
         """
         safe_name = filename or f"voice_{uuid.uuid4().hex}"
@@ -438,36 +438,25 @@ class AIEngine:
         mp3_path = os.path.join(base_dir, f"{safe_name}.mp3")
         out_path = os.path.join(base_dir, f"{safe_name}.ogg")
 
-        # 1) edge-tts — реалистичный нейроголос
+        # gTTS — единственный работающий TTS в РФ
         try:
-            import edge_tts
-            communicate = edge_tts.Communicate(
-                text, "ru-RU-SvetlanaNeural", rate="-8%", pitch="-3Hz"
-            )
-            await communicate.save(mp3_path)
-            if os.path.exists(mp3_path) and os.path.getsize(mp3_path) > 500:
-                print(f"🎤 edge-tts OK (реалистичный): {os.path.getsize(mp3_path)} bytes")
-            else:
-                raise Exception("edge-tts вернул пустой файл")
+            from gtts import gTTS
+            # Настройки для более естественного звучания
+            tts = gTTS(text=text, lang="ru", tld="com", slow=False)
+            tts.save(mp3_path)
+            if not os.path.exists(mp3_path) or os.path.getsize(mp3_path) < 500:
+                raise Exception("gTTS вернул пустой файл")
+            print(f"🎤 gTTS OK: {os.path.getsize(mp3_path)} bytes")
         except Exception as e:
-            print(f"⚠️ edge-tts: {e}")
-            # 2) gTTS — надёжный fallback
-            try:
-                from gtts import gTTS
-                tts = gTTS(text=text, lang="ru", tld="com")
-                tts.save(mp3_path)
-                if not os.path.exists(mp3_path) or os.path.getsize(mp3_path) < 500:
-                    raise Exception("gTTS вернул пустой файл")
-                print(f"🎤 gTTS OK (fallback): {os.path.getsize(mp3_path)} bytes")
-            except Exception as e2:
-                print(f"⚠️ gTTS тоже упал: {e2}")
+            print(f"⚠️ gTTS: {e}")
+            return None
 
         if as_ogg and os.path.exists(mp3_path):
             try:
                 import imageio_ffmpeg
                 import subprocess
                 ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
-                cmd = [ffmpeg, "-y", "-i", mp3_path, "-c:a", "libopus", "-b:a", "48k", out_path]
+                cmd = [ffmpeg, "-y", "-i", mp3_path, "-c:a", "libopus", "-b:a", "48k", "-ar", "24000", out_path]
                 r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
                 if r.returncode == 0 and os.path.exists(out_path):
                     print(f"🎤 Конвертировано в OGG: {os.path.getsize(out_path)} bytes")
