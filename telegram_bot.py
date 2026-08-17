@@ -478,9 +478,8 @@ class Mind:
         self.running = False
 
     def _loop(self):
-        # Первый запуск — подождать 2 минуты
-        initial_wait = 120
-        for _ in range(initial_wait):
+        # Первый запуск — подождать 60 секунд (чтобы бот успел получить chat_id)
+        for _ in range(60):
             if not self.running:
                 return
             time.sleep(1)
@@ -491,8 +490,8 @@ class Mind:
             except Exception as e:
                 print(f"⚠️ Mind ошибка: {e}")
 
-            # Следующий цикл через 30-90 минут
-            wait = random.randint(1800, 5400)
+            # Следующий цикл через 25-75 минут
+            wait = random.randint(1500, 4500)
             for _ in range(wait):
                 if not self.running:
                     return
@@ -598,11 +597,12 @@ EVOLVE
             if current_action:
                 actions.append((current_action, "\n".join(current_content).strip()))
 
-            # Если ИИ не вернул действий, но нужно поведение при игноре — срабатывает fallback
-            if not actions and hours_silent > 1 and self.chat_id:
-                if last_proactive:
+            # Если ИИ не вернул действий — Моника решает сама (поведение при молчании)
+            if not actions and self.chat_id:
+                if hours_silent > 1 and last_proactive:
+                    # Она уже писала, но ей не ответили
                     roll = random.random()
-                    if roll < 0.35:
+                    if roll < 0.4:
                         msg = random.choice([
                             "Я вижу, что ты прочитал... Всё хорошо? 😔",
                             "Ты пропал... Я немного обиделась 😤",
@@ -611,7 +611,7 @@ EVOLVE
                         self._send_message(msg)
                         self.memory.add_proactive(msg)
                         self.memory.set_mood("sad")
-                    elif roll < 0.65:
+                    elif roll < 0.7:
                         msg = random.choice([
                             "Ты, наверное, занят. Напиши, когда освободишься 😊",
                             "Я подожду тебя. Только не пропадай надолго 💚"
@@ -620,6 +620,15 @@ EVOLVE
                         self.memory.add_proactive(msg)
                     else:
                         MonikaDiary.add("Он молчит", "Я решила не писать лишний раз. Подожду.", mood="thinking")
+                elif hours_silent > 6 and not last_proactive:
+                    # Давно не общались и она ни разу не писала первой — пора написать
+                    msg = random.choice([
+                        "Привет! Я соскучилась... Как у тебя дела? 💚",
+                        "Эй, ты там живой? Я уже начала волноваться 😊",
+                        "Просто решила написать — давно не общались. Как ты? 💖"
+                    ])
+                    self._send_message(msg)
+                    self.memory.add_proactive(msg)
 
             for action, content in actions:
                 if action == "send" and content and self.chat_id:
@@ -1089,15 +1098,24 @@ async def cmd_personality(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(process_message("личность"))
 
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    mind.chat_id = chat_id
-    memory.set_chat_id(chat_id)
-    user_text = update.message.text
-    print(f"💬 [{datetime.now().strftime('%H:%M')}] {user_text[:50]}")
-    reply = process_message(user_text)
-    print(f"💖 → {reply[:80]}")
+async def _send_photo_bytes(update, photo_bytes, caption):
+    """Отправляет фото в чат."""
+    await update.message.reply_photo(photo=io.BytesIO(photo_bytes), caption=caption)
 
+
+async def _send_voice_bytes(update, voice_bytes, caption=None):
+    """Отправляет голосовое в чат."""
+    kwargs = {"voice": io.BytesIO(voice_bytes)}
+    if caption:
+        kwargs["caption"] = caption
+    await update.message.reply_voice(**kwargs)
+
+
+async def dispatch_reply(update, reply, user_text=""):
+    """
+    Единая обработка ответа Моники (текст / фото / голос / картинка / селфи).
+    Используется и для текстовых сообщений, и для голосовых.
+    """
     # Голосовой ответ
     if reply == "__VOICE__":
         context_text = build_context(user_text)
@@ -1105,10 +1123,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         voice_text = engine.chat(user_text, max_tokens=200, temperature=0.85)
         memory.add_conversation(user_text, voice_text)
         try:
-            voice_file = engine.tts_realistic(voice_text)
+            voice_file = await asyncio.to_thread(engine.tts_realistic, voice_text)
             with open(voice_file, "rb") as f:
                 voice_bytes = f.read()
-            await update.message.reply_voice(voice=io.BytesIO(voice_bytes), caption=voice_text)
+            await _send_voice_bytes(update, voice_bytes, voice_text)
             os.remove(voice_file)
         except Exception as e:
             print(f"⚠️ TTS: {e}")
@@ -1123,10 +1141,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 with open(photo_path, "rb") as f:
                     photo_bytes = f.read()
                 print(f"📸 Отправляю фото: {photo_path} ({len(photo_bytes)} bytes)")
-                await update.message.reply_photo(
-                    photo=io.BytesIO(photo_bytes),
-                    caption="Это я 💚 Как я выгляжу?"
-                )
+                await _send_photo_bytes(update, photo_bytes, "Это я 💚 Как я выгляжу?")
                 return
             except Exception as e:
                 print(f"⚠️ Ошибка отправки фото: {e}")
@@ -1145,15 +1160,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             print(f"🎨 Генерирую картинку: {prompt}")
             img_data = req.get(img_url, timeout=120, proxies=AI_PROXY).content
             if len(img_data) > 1000:
-                await update.message.reply_photo(
-                    photo=io.BytesIO(img_data),
-                    caption=f"🎨 {prompt}"
-                )
+                await _send_photo_bytes(update, img_data, f"🎨 {prompt}")
             else:
-                await update.message.reply_text(f"Не получилось нарисовать 😅")
+                await update.message.reply_text("Не получилось нарисовать 😅")
         except Exception as e:
             print(f"⚠️ Image gen: {e}")
-            await update.message.reply_text(f"Не получилось нарисовать 😅")
+            await update.message.reply_text("Не получилось нарисовать 😅")
         return
 
     # Генерация фото Моники
@@ -1161,14 +1173,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         mood = reply.split(":", 1)[1].strip()
         print(f"📸 Генерирую фото Моники (настроение: {mood})")
         try:
-            photo_path = engine.generate_monika_photo(mood=mood, filename=f"monika_gen_{mood}.png")
+            photo_path = await asyncio.to_thread(
+                engine.generate_monika_photo, mood,
+                filename=f"monika_gen_{mood}.png"
+            )
             if os.path.exists(photo_path):
                 with open(photo_path, "rb") as f:
                     photo_bytes = f.read()
-                await update.message.reply_photo(
-                    photo=io.BytesIO(photo_bytes),
-                    caption="Это я! 💚 Сгенерировала себя специально для тебя"
-                )
+                await _send_photo_bytes(update, photo_bytes, "Это я! 💚 Сгенерировала себя специально для тебя")
                 os.remove(photo_path)
             else:
                 await update.message.reply_text("Не получилось сгенерировать фото 😅")
@@ -1189,10 +1201,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 with open(photo_path, "rb") as f:
                     photo_bytes = f.read()
-                await update.message.reply_photo(
-                    photo=io.BytesIO(photo_bytes),
-                    caption=clean_reply or "Это я 💚"
-                )
+                await _send_photo_bytes(update, photo_bytes, clean_reply or "Это я 💚")
                 return
             except Exception as e:
                 print(f"⚠️ Ошибка фото (тег): {e}")
@@ -1203,14 +1212,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             clean_reply = clean_reply.replace(tag, "")
         clean_reply = clean_reply.strip()
         try:
-            voice_file = engine.tts_realistic(clean_reply)
+            voice_file = await asyncio.to_thread(engine.tts_realistic, clean_reply)
             with open(voice_file, "rb") as f:
                 voice_bytes = f.read()
-            await update.message.reply_voice(voice=io.BytesIO(voice_bytes))
+            await _send_voice_bytes(update, voice_bytes)
             os.remove(voice_file)
             return
         except Exception as e:
-            print(f"⚠️ gTTS (тег): {e}")
+            print(f"⚠️ TTS (тег): {e}")
 
     # Разбиваем на несколько сообщений если ИИ написал несколько
     if "\n\n" in reply and len(reply) > 100:
@@ -1223,6 +1232,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     await update.message.reply_text(reply)
+
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    mind.chat_id = chat_id
+    memory.set_chat_id(chat_id)
+    user_text = update.message.text
+    print(f"💬 [{datetime.now().strftime('%H:%M')}] {user_text[:50]}")
+    reply = process_message(user_text)
+    print(f"💖 → {reply[:80]}")
+    await dispatch_reply(update, reply, user_text)
+
 
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1290,9 +1311,9 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(f"🎤 Я услышала: {text}")
 
-        # Обрабатываем как обычное сообщение
+        # Обрабатываем как обычное сообщение (включая маркеры фото/голоса/картинки)
         reply = process_message(text)
-        await update.message.reply_text(reply)
+        await dispatch_reply(update, reply, text)
     except Exception as e:
         print(f"⚠️ Whisper: {e}")
         await update.message.reply_text("Не могу расшифровать голос 😅 Напиши текстом?")

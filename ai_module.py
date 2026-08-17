@@ -335,41 +335,47 @@ class AIEngine:
         r.raise_for_status()
         return r.json().get("text", "")
 
-    # ===== Реалистичный женский TTS (edge-tts — Microsoft Edge) =====
+    # ===== Реалистичный женский TTS (edge-tts → gTTS) =====
     def tts_realistic(self, text, filename=None):
         """
-        Генерирует женский голос с приоритетом реалистичности.
-        Порядок: edge-tts (SvetlanaNeural) -> gTTS fallback.
-        Возвращает путь к mp3-файлу.
+        Генерирует женский голос.
+        Приоритет: edge-tts (SvetlanaNeural) → gTTS fallback.
+        Безопасен в async-контексте — edge-tts пропускается, если asyncio.run() недоступен.
         """
         safe_name = filename or f"voice_{uuid.uuid4().hex}.mp3"
         base_dir = os.path.dirname(os.path.abspath(__file__))
         out_path = os.path.join(base_dir, safe_name)
 
-        # 1) Реалистичный нейроголос
+        # 1) edge-tts — только если НЕ внутри async-контекста
         try:
-            import edge_tts
-            import asyncio
+            asyncio.get_running_loop()
+            in_async = True
+        except RuntimeError:
+            in_async = False
 
-            async def _synthesize():
-                communicate = edge_tts.Communicate(
-                    text,
-                    "ru-RU-SvetlanaNeural",
-                    rate="-8%",
-                    pitch="-3Hz"
-                )
-                await communicate.save(out_path)
+        if not in_async:
+            try:
+                import edge_tts
+                import asyncio
 
-            asyncio.run(_synthesize())
-            return out_path
-        except Exception as e:
-            print(f"⚠️ edge-tts ошибка: {e}")
+                async def _synthesize():
+                    communicate = edge_tts.Communicate(
+                        text, "ru-RU-SvetlanaNeural",
+                        rate="-8%", pitch="-3Hz"
+                    )
+                    await communicate.save(out_path)
+
+                asyncio.run(_synthesize())
+                if os.path.exists(out_path) and os.path.getsize(out_path) > 1000:
+                    return out_path
+            except Exception as e:
+                print(f"⚠️ edge-tts ошибка: {e}")
 
         # 2) Надёжный fallback
         return self._tts_fallback(text, out_path)
 
     def _tts_fallback(self, text, out_path):
-        """Fallback TTS через gTTS если edge-tts недоступен."""
+        """Fallback TTS через gTTS."""
         from gtts import gTTS
         tts = gTTS(text=text, lang="ru", tld="com")
         tts.save(out_path)
@@ -410,19 +416,19 @@ class AIEngine:
             )
         }
         prompt = prompts.get(mood, prompts["casual"])
-        negative = "child, loli, lowres, blurry, deformed face, bad hands, extra limbs, nsfw watermark, text"
-        full_prompt = f"{prompt}. negative prompt: {negative}"
-
-        encoded = urllib.parse.quote(full_prompt)
+        encoded = urllib.parse.quote(prompt)
         seed = int(time.time()) % 1000000
         base_dir = os.path.dirname(os.path.abspath(__file__))
         out_path = os.path.join(base_dir, filename)
+        # Без model=flux — Pollinations надёжно генерирует только базовой моделью
         url = (
             f"https://image.pollinations.ai/prompt/{encoded}"
-            f"?width=768&height=1024&nologo=true&seed={seed}&model=flux"
+            f"?width=512&height=768&nologo=true&seed={seed}"
         )
         r = requests.get(url, timeout=120, proxies=PROXY)
         r.raise_for_status()
+        if len(r.content) < 1000:
+            raise Exception("Pollinations вернул пустую картинку")
         with open(out_path, "wb") as f:
             f.write(r.content)
         return out_path
