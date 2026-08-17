@@ -756,20 +756,9 @@ def main():
     # Запускаем фоновые мысли
     mind.start()
 
-    # На Render — webhook, локально — polling
-    RENDER_URL = os.environ.get("RENDER_EXTERNAL_URL")
-
-    if RENDER_URL:
-        print(f"☁️ Render webhook: {RENDER_URL}")
-        app.run_webhook(
-            listen="0.0.0.0",
-            port=KEEP_ALIVE_PORT,
-            url_path=BOT_TOKEN,
-            webhook_url=f"{RENDER_URL}/{BOT_TOKEN}"
-        )
-    else:
-        print("\n✅ Бот запущен (polling)! Пиши в Telegram.\n")
-        app.run_polling(allowed_updates=Update.ALL_TYPES)
+    # Polling везде — проще и надёжнее, keep-alive не даёт уснуть
+    print("\n✅ Бот запущен (polling + keep-alive)! Пиши в Telegram.\n")
+    app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
 if __name__ == "__main__":
