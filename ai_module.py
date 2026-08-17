@@ -410,8 +410,8 @@ class AIEngine:
     # ===== Генерация картинок (Pollinations.ai) =====
     def generate_image_url(self, prompt):
         """Возвращает URL сгенерированной картинки через Pollinations.ai."""
-        import urllib.parse
-        encoded = urllib.parse.quote(prompt)
+        from urllib.parse import quote
+        encoded = quote(prompt)
         return f"https://image.pollinations.ai/prompt/{encoded}?width=512&height=512&nologo=true"
 
     # ===== Транскрипция голоса (Groq Whisper) =====
@@ -507,7 +507,8 @@ class AIEngine:
             )
         }
         prompt = prompts.get(mood, prompts["casual"])
-        encoded = urllib.parse.quote(prompt)
+        from urllib.parse import quote
+        encoded = quote(prompt)
         seed = int(time.time()) % 1000000
         base_dir = os.path.dirname(os.path.abspath(__file__))
         out_path = os.path.join(base_dir, filename)

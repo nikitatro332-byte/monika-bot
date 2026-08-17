@@ -1098,6 +1098,20 @@ async def cmd_personality(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(process_message("личность"))
 
 
+def _clean_command_prefixes(text):
+    """Убирает командные префиксы (VOICE:, SEND:, PHOTO:, DIARY:, EVOLVE) из начала текста."""
+    text = text.strip()
+    for prefix in ["VOICE:", "SEND:", "PHOTO:", "DIARY:", "EVOLVE", "Голос:", "голос:"]:
+        if text.upper().startswith(prefix.upper()):
+            text = text[len(prefix):].strip()
+    # Убираем первую строку если она осталась командой
+    lines = text.split("\n")
+    if lines and lines[0].strip().upper() in ("VOICE", "SEND", "PHOTO", "DIARY", "EVOLVE", "ГОЛОС"):
+        lines = lines[1:]
+        text = "\n".join(lines).strip()
+    return text
+
+
 async def _send_photo_bytes(update, photo_bytes, caption):
     """Отправляет фото в чат."""
     await update.message.reply_photo(photo=io.BytesIO(photo_bytes), caption=caption)
@@ -1111,6 +1125,7 @@ async def _send_voice_bytes(update, voice_bytes, caption=None):
     await update.message.reply_voice(**kwargs)
 
 
+
 async def dispatch_reply(update, reply, user_text=""):
     """
     Единая обработка ответа Моники (текст / фото / голос / картинка / селфи).
@@ -1121,6 +1136,7 @@ async def dispatch_reply(update, reply, user_text=""):
         context_text = build_context(user_text)
         engine.set_system(personality.get_prompt() + "\n\nКОНТЕКСТ:\n" + context_text)
         voice_text = engine.chat(user_text, max_tokens=200, temperature=0.85)
+        voice_text = _clean_command_prefixes(voice_text)
         memory.add_conversation(user_text, voice_text)
         try:
             voice_file = await asyncio.to_thread(engine.tts_realistic, voice_text)
@@ -1183,9 +1199,19 @@ async def dispatch_reply(update, reply, user_text=""):
                 await _send_photo_bytes(update, photo_bytes, "Это я! 💚 Сгенерировала себя специально для тебя")
                 os.remove(photo_path)
             else:
-                await update.message.reply_text("Не получилось сгенерировать фото 😅")
+                raise Exception("файл не создан")
         except Exception as e:
-            print(f"⚠️ Monika photo gen: {e}")
+            print(f"⚠️ Monika photo gen: {e} — отправляю готовое фото")
+            # Fallback: отправляем готовое фото из папки
+            fallback_path = MonikaPhotos.get_photo(mood)
+            if fallback_path and os.path.exists(fallback_path):
+                try:
+                    with open(fallback_path, "rb") as f:
+                        photo_bytes = f.read()
+                    await _send_photo_bytes(update, photo_bytes, "Это я 💚 (не успела сгенерировать новое)")
+                    return
+                except Exception as e2:
+                    print(f"⚠️ Fallback фото: {e2}")
             await update.message.reply_text("Не получилось сгенерировать фото 😅")
         return
 
