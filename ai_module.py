@@ -114,6 +114,9 @@ MODELS = {
     # OpenRouter (бесплатные)
     "deepseek-r1:free":         {"provider": "openrouter", "free": True, "full": "deepseek/deepseek-r1:free"},
     "llama-3.3-70b:free":       {"provider": "openrouter", "free": True, "full": "meta-llama/llama-3.3-70b-instruct:free"},
+    "openrouter:free":          {"provider": "openrouter", "free": True, "full": "openrouter/free"},
+    "gpt-oss-20b:free":         {"provider": "openrouter", "free": True, "full": "openai/gpt-oss-20b:free"},
+    "nemotron-3-super:free":    {"provider": "openrouter", "free": True, "full": "nvidia/nemotron-3-super-120b-a12b:free"},
 }
 
 FREE_MODELS = {k: v for k, v in MODELS.items() if v["free"]}
@@ -137,29 +140,85 @@ class AIEngine:
         self.history = []
 
     def chat(self, user_message, max_tokens=500, temperature=0.8):
-        """Главный метод — отправляет сообщение и возвращает ответ."""
+        """Главный метод — отправляет сообщение и возвращает ответ с fallback."""
         self.history.append({"role": "user", "content": user_message})
 
         model_info = MODELS.get(self.current_model)
         if not model_info:
+            # Модель не найдена — пробуем никнейм через OpenRouter/Gemini
             return f"❌ Модель '{self.current_model}' не найдена"
 
         provider = model_info["provider"]
+        original_model = self.current_model
+
+        # Цепочка fallback при ошибках: groq → gemini → openrouter
+        fallback_chain = {
+            "groq": ["gemini-flash-latest", "openrouter:free"],
+            "gemini": ["openrouter:free", "llama-3.3-70b-versatile"],
+            "openrouter": ["gemini-flash-latest", "llama-3.3-70b-versatile"],
+            "xai": ["gemini-flash-latest", "openrouter:free"],
+        }
+
+        attempts = 0
+        last_err = None
+        tried = set()
 
         try:
-            if provider == "xai":
-                reply = self._xai(user_message, max_tokens, temperature)
-            elif provider == "gemini":
-                reply = self._gemini(user_message, max_tokens, temperature)
-            elif provider == "groq":
-                reply = self._groq(user_message, max_tokens, temperature)
-            elif provider == "openrouter":
-                reply = self._openrouter(user_message, max_tokens, temperature, model_info["full"])
-            else:
-                return "❌ Неизвестный провайдер"
+            while attempts < 3:
+                model_info = MODELS.get(self.current_model)
+                if not model_info:
+                    return f"❌ Модель '{self.current_model}' не найдена"
+
+                provider = model_info["provider"]
+                try:
+                    if provider == "xai":
+                        reply = self._xai(user_message, max_tokens, temperature)
+                    elif provider == "gemini":
+                        reply = self._gemini(user_message, max_tokens, temperature)
+                    elif provider == "groq":
+                        reply = self._groq(user_message, max_tokens, temperature)
+                    elif provider == "openrouter":
+                        reply = self._openrouter(user_message, max_tokens, temperature, model_info["full"])
+                    else:
+                        return "❌ Неизвестный провайдер"
+
+                    self.history.append({"role": "assistant", "content": reply})
+                    return reply
+                except Exception as e:
+                    last_err = f"({provider}: {self.current_model}): {e}"
+                    attempts += 1
+                    if "429" in str(e) or "503" in str(e) or "502" in str(e) or "timeout" in str(e).lower():
+                        print(f"⚠️ {last_err} → пробую запасную модель")
+                        # Перебираем цепочку
+                        switched = False
+                        for fb in fallback_chain.get(provider, []):
+                            if fb not in tried and fb in MODELS:
+                                self.switch(fb)
+                                tried.add(fb)
+                                switched = True
+                                break
+                        if not switched:
+                            # Все исчерпаны — остаёмся на исходной
+                            self.switch(original_model)
+                            raise
+                    else:
+                        # Ошибка не rate-limit — не пробуем другие модели
+                        self.history.append({"role": "assistant", "content": f"⚠️ Ошибка: {e}"})
+                        return f"⚠️ Ошибка: {e}"
+
+            # Возвращаем исходную модель после использования fallback
+            self.switch(original_model)
+            reply = f"⚠️ Ошибка: {last_err}"
         except Exception as e:
             reply = f"⚠️ Ошибка ({provider}): {e}"
+            # Пробуем Gemini как последний шанс
+            try:
+                self.switch("gemini-flash-latest")
+                return self._gemini(user_message, max_tokens, temperature)
+            except Exception as e2:
+                pass
 
+        self.switch(original_model)
         self.history.append({"role": "assistant", "content": reply})
         return reply
 
@@ -204,12 +263,26 @@ class AIEngine:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.current_model}:generateContent?key={GEMINI_API_KEY}"
         r = requests.post(url, json={
             "contents": contents,
-            "generationConfig": {"temperature": temperature, "maxOutputTokens": max_tokens},
+            "generationConfig": {"temperature": temperature, "maxOutputTokens": max_tokens + 200},
             "systemInstruction": {"parts": [{"text": self.system_prompt}]} if self.system_prompt else None
         }, timeout=30, proxies=PROXY)
         r.raise_for_status()
         data = r.json()
-        return data["candidates"][0]["content"]["parts"][0]["text"]
+
+        # Gemini 3.x может вернуть пустой content (мысли съели токены) — пробуем достать текст безопасно
+        try:
+            candidate = data["candidates"][0]["content"]
+            parts = candidate.get("parts", [])
+            for p in parts:
+                if "text" in p and p["text"].strip():
+                    return p["text"]
+            # Fallback: мысли
+            for p in parts:
+                if "thought" in p:
+                    return p["thought"]
+            raise KeyError("no text in parts")
+        except (KeyError, IndexError) as e:
+            raise Exception(f"Gemini пустой ответ: {e}")
 
     # ===== Groq =====
     def _groq(self, message, max_tokens, temperature):
@@ -234,12 +307,30 @@ class AIEngine:
         msgs.extend(self.history)
         r = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
-            headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://github.com/nikitatro332-byte/monika-bot",
+                "X-Title": "Monika Bot"
+            },
             json={"model": full_name, "messages": msgs, "max_tokens": max_tokens, "temperature": temperature},
             timeout=60, proxies=PROXY
         )
         r.raise_for_status()
-        return r.json()["choices"][0]["message"]["content"]
+        data = r.json()
+        try:
+            msg = data["choices"][0]["message"]
+            content = msg.get("content")
+            if content and content.strip():
+                return content
+            # Модель-рассуждатель вернула пустой content — пробуем reasoning
+            reasoning = msg.get("reasoning")
+            if reasoning and reasoning.strip():
+                return reasoning.strip()
+            raise Exception("OpenRouter пустой ответ (content и reasoning пусты)")
+        except (KeyError, IndexError, TypeError) as e:
+            print(f"⚠️ OpenRouter ответ: {str(data)[:300]}")
+            raise Exception(f"OpenRouter пустой ответ: {e}")
 
     # ===== Gemini Vision (распознавание фото) =====
     def vision(self, image_bytes, prompt="Опиши что на фото. Коротко, 2-3 предложения."):

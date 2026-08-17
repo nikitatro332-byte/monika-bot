@@ -944,7 +944,7 @@ def process_message(text):
         return f"__IMAGE__:{prompt}"
 
     # --- Генерация фото Моники ---
-    if low.startswith("сфоткай ") or low.startswith("сфоткайменя ") or low.startswith("сгенерируй фото ") or low.startswith("сделай селфи"):
+    if low.startswith("сфоткай ") or low.startswith("сфоткайменя ") or low.startswith("сгенерируй фото ") or low.startswith("сделай селфи") or low in ("сфоткайся", "сфоткай", "сфотографируйся", "селфи", "фото меня"):
         mood = "casual"
         if any(w in low for w in ["счастлив", "радостн", "весел", "happy"]):
             mood = "happy"
