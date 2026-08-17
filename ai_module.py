@@ -426,11 +426,11 @@ class AIEngine:
         r.raise_for_status()
         return r.json().get("text", "")
 
-    # ===== Реалистичный женский TTS (gTTS с настройками, конвертация в OGG) =====
+    # ===== Реалистичный женский TTS (edge-tts через прокси → gTTS fallback) =====
     async def tts_realistic(self, text, filename=None, as_ogg=True):
         """
         Генерирует женский голос и конвертирует в OGG Opus (для Telegram voice).
-        gTTS с настройками pitch/rate для более естественного звучания.
+        Приоритет: edge-tts через прокси → gTTS fallback.
         Возвращает путь к файлу (.ogg).
         """
         safe_name = filename or f"voice_{uuid.uuid4().hex}"
@@ -438,18 +438,44 @@ class AIEngine:
         mp3_path = os.path.join(base_dir, f"{safe_name}.mp3")
         out_path = os.path.join(base_dir, f"{safe_name}.ogg")
 
-        # gTTS — единственный работающий TTS в РФ
-        try:
-            from gtts import gTTS
-            # Настройки для более естественного звучания
-            tts = gTTS(text=text, lang="ru", tld="com", slow=False)
-            tts.save(mp3_path)
-            if not os.path.exists(mp3_path) or os.path.getsize(mp3_path) < 500:
-                raise Exception("gTTS вернул пустой файл")
-            print(f"🎤 gTTS OK: {os.path.getsize(mp3_path)} bytes")
-        except Exception as e:
-            print(f"⚠️ gTTS: {e}")
-            return None
+        # 1) edge-tts через прокси (обход блокировки в РФ)
+        proxies_list = [
+            "http://66.163.119.55:10006",
+            "socks5://66.163.119.55:10006",
+            "socks5h://66.163.119.55:10006",
+            "socks5://152.53.20.190:20000",
+            "socks5h://152.53.20.190:20000",
+        ]
+        
+        edge_ok = False
+        for proxy_url in proxies_list:
+            try:
+                import edge_tts
+                communicate = edge_tts.Communicate(
+                    text, "ru-RU-SvetlanaNeural",
+                    rate="-8%", pitch="-3Hz",
+                    proxy=proxy_url
+                )
+                await communicate.save(mp3_path)
+                if os.path.exists(mp3_path) and os.path.getsize(mp3_path) > 500:
+                    print(f"🎤 edge-tts OK через {proxy_url}: {os.path.getsize(mp3_path)} bytes")
+                    edge_ok = True
+                    break
+            except Exception as e:
+                print(f"⚠️ edge-tts через {proxy_url}: {e}")
+
+        # 2) gTTS — надёжный fallback
+        if not edge_ok:
+            try:
+                from gtts import gTTS
+                tts = gTTS(text=text, lang="ru", tld="com", slow=False)
+                tts.save(mp3_path)
+                if not os.path.exists(mp3_path) or os.path.getsize(mp3_path) < 500:
+                    raise Exception("gTTS вернул пустой файл")
+                print(f"🎤 gTTS OK: {os.path.getsize(mp3_path)} bytes")
+            except Exception as e:
+                print(f"⚠️ gTTS: {e}")
+                return None
 
         if as_ogg and os.path.exists(mp3_path):
             try:
@@ -467,7 +493,6 @@ class AIEngine:
             except Exception as e:
                 print(f"⚠️ ffmpeg: {e}")
 
-        # Если конвертация не удалась — возвращаем MP3
         return mp3_path if os.path.exists(mp3_path) else None
 
     # ===== Генерация фото Моники (DDLC style) =====
