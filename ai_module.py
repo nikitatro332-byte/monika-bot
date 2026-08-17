@@ -449,11 +449,13 @@ class AIEngine:
         except Exception as e:
             print(f"⚠️ edge-tts: {e}")
 
-        # 2) gTTS fallback
+        # 2) gTTS fallback — принудительно русский
         if not os.path.exists(mp3_path) or os.path.getsize(mp3_path) < 500:
             try:
                 from gtts import gTTS
-                tts = gTTS(text=text, lang="ru", tld="com", slow=False)
+                # Очищаем текст от спецсимволов
+                clean_text = text.replace("\n", " ").replace("\r", " ")
+                tts = gTTS(text=clean_text, lang="ru", tld="com", slow=False)
                 tts.save(mp3_path)
                 if not os.path.exists(mp3_path) or os.path.getsize(mp3_path) < 500:
                     raise Exception("gTTS вернул пустой файл")
