@@ -22,6 +22,7 @@ import subprocess
 import time
 import socket
 import sys
+import uuid
 
 # =====================================================
 # 🔑 КЛЮЧИ
@@ -333,6 +334,98 @@ class AIEngine:
                           files=files, data=data, timeout=60, proxies=PROXY)
         r.raise_for_status()
         return r.json().get("text", "")
+
+    # ===== Реалистичный женский TTS (edge-tts — Microsoft Edge) =====
+    def tts_realistic(self, text, filename=None):
+        """
+        Генерирует женский голос с приоритетом реалистичности.
+        Порядок: edge-tts (SvetlanaNeural) -> gTTS fallback.
+        Возвращает путь к mp3-файлу.
+        """
+        safe_name = filename or f"voice_{uuid.uuid4().hex}.mp3"
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        out_path = os.path.join(base_dir, safe_name)
+
+        # 1) Реалистичный нейроголос
+        try:
+            import edge_tts
+            import asyncio
+
+            async def _synthesize():
+                communicate = edge_tts.Communicate(
+                    text,
+                    "ru-RU-SvetlanaNeural",
+                    rate="-8%",
+                    pitch="-3Hz"
+                )
+                await communicate.save(out_path)
+
+            asyncio.run(_synthesize())
+            return out_path
+        except Exception as e:
+            print(f"⚠️ edge-tts ошибка: {e}")
+
+        # 2) Надёжный fallback
+        return self._tts_fallback(text, out_path)
+
+    def _tts_fallback(self, text, out_path):
+        """Fallback TTS через gTTS если edge-tts недоступен."""
+        from gtts import gTTS
+        tts = gTTS(text=text, lang="ru", tld="com")
+        tts.save(out_path)
+        return out_path
+
+    # ===== Генерация фото Моники (DDLC style) =====
+    def generate_monika_photo(self, mood="casual", filename="monika_generated.png"):
+        """
+        Генерирует фото Моники в стиле DDLC с точным промптом.
+        mood: casual, happy, sad, thinking, cooking, piano
+        """
+        base_desc = (
+            "young woman, 18 years old, 2D anime / visual novel style, "
+            "long coral-brown hair, high ponytail tied with a large white bow, "
+            "two long side strands framing her face, big emerald-green eyes, light skin, slim build, "
+            "school uniform: white shirt, brown vest, grey-blue blazer, blue pleated skirt, red ribbon at collar, "
+            "black thigh-high stockings, white-pink school slippers, Doki Doki Literature Club aesthetic"
+        )
+
+        prompts = {
+            "casual": (
+                f"{base_desc}, soft lighting, gentle smile, relaxed posture, clean lineart, detailed eyes"
+            ),
+            "happy": (
+                f"{base_desc}, bright happy smile, waving hand, cheerful pose, sparkling eyes, warm daylight"
+            ),
+            "sad": (
+                f"{base_desc}, sad expression, looking down, glossy eyes, melancholic soft light"
+            ),
+            "thinking": (
+                f"{base_desc}, thoughtful expression, hand near chin, calm classroom background, soft light"
+            ),
+            "cooking": (
+                f"{base_desc}, white apron over uniform, cooking in kitchen, holding wooden spoon, cozy warm lighting"
+            ),
+            "piano": (
+                f"{base_desc}, sitting at piano, focused serious look, stage-like soft spotlight"
+            )
+        }
+        prompt = prompts.get(mood, prompts["casual"])
+        negative = "child, loli, lowres, blurry, deformed face, bad hands, extra limbs, nsfw watermark, text"
+        full_prompt = f"{prompt}. negative prompt: {negative}"
+
+        encoded = urllib.parse.quote(full_prompt)
+        seed = int(time.time()) % 1000000
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        out_path = os.path.join(base_dir, filename)
+        url = (
+            f"https://image.pollinations.ai/prompt/{encoded}"
+            f"?width=768&height=1024&nologo=true&seed={seed}&model=flux"
+        )
+        r = requests.get(url, timeout=120, proxies=PROXY)
+        r.raise_for_status()
+        with open(out_path, "wb") as f:
+            f.write(r.content)
+        return out_path
 
 
 # =====================================================

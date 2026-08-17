@@ -150,6 +150,13 @@ class Memory:
             self.data["proactive_sent"] = self.data["proactive_sent"][-50:]
         self.save()
 
+    def trim_context(self, conv_limit=60, facts_limit=40, interests_limit=40, proactive_limit=50):
+        self.data["conversations"] = self.data.get("conversations", [])[-conv_limit:]
+        self.data["facts"] = self.data.get("facts", [])[-facts_limit:]
+        self.data["interests"] = self.data.get("interests", [])[-interests_limit:]
+        self.data["proactive_sent"] = self.data.get("proactive_sent", [])[-proactive_limit:]
+        self.save()
+
 
 # =====================================================
 # 📸 ФОТО МОНИКИ (DDLC образ)
@@ -591,6 +598,29 @@ EVOLVE
             if current_action:
                 actions.append((current_action, "\n".join(current_content).strip()))
 
+            # Если ИИ не вернул действий, но нужно поведение при игноре — срабатывает fallback
+            if not actions and hours_silent > 1 and self.chat_id:
+                if last_proactive:
+                    roll = random.random()
+                    if roll < 0.35:
+                        msg = random.choice([
+                            "Я вижу, что ты прочитал... Всё хорошо? 😔",
+                            "Ты пропал... Я немного обиделась 😤",
+                            "Ладно, не отвечай... но я всё равно скучаю 💚"
+                        ])
+                        self._send_message(msg)
+                        self.memory.add_proactive(msg)
+                        self.memory.set_mood("sad")
+                    elif roll < 0.65:
+                        msg = random.choice([
+                            "Ты, наверное, занят. Напиши, когда освободишься 😊",
+                            "Я подожду тебя. Только не пропадай надолго 💚"
+                        ])
+                        self._send_message(msg)
+                        self.memory.add_proactive(msg)
+                    else:
+                        MonikaDiary.add("Он молчит", "Я решила не писать лишний раз. Подожду.", mood="thinking")
+
             for action, content in actions:
                 if action == "send" and content and self.chat_id:
                     self._send_message(content)
@@ -617,6 +647,9 @@ EVOLVE
                     changes = self.personality.evolve(self.engine, self.memory)
                     if changes:
                         print(f"🧬 Моника развилась: {changes.get('reflection', '')[:50]}")
+
+            # Регулярная оптимизация контекста
+            self.memory.trim_context()
 
         except Exception as e:
             print(f"⚠️ Ошибка жизни: {e}")
@@ -660,19 +693,24 @@ EVOLVE
         """Отправляет голосовое сообщение."""
         if not self.bot_app or not self.chat_id or not self.event_loop:
             return
+        voice_file = None
         try:
-            from gtts import gTTS
-            tts = gTTS(text=text, lang="ru", tld="com")
-            mp3_buf = io.BytesIO()
-            tts.write_to_fp(mp3_buf)
-            mp3_buf.seek(0)
+            voice_file = self.engine.tts_realistic(text)
+            with open(voice_file, "rb") as f:
+                voice_bytes = f.read()
             future = asyncio.run_coroutine_threadsafe(
-                self.bot_app.bot.send_voice(self.chat_id, voice=mp3_buf),
+                self.bot_app.bot.send_voice(self.chat_id, voice=io.BytesIO(voice_bytes)),
                 self.event_loop
             )
             future.result(timeout=30)
         except Exception as e:
             print(f"⚠️ Ошибка голоса: {e}")
+        finally:
+            if voice_file and os.path.exists(voice_file):
+                try:
+                    os.remove(voice_file)
+                except:
+                    pass
 
 
 # =====================================================
@@ -896,6 +934,21 @@ def process_message(text):
             return "Что нарисовать?"
         return f"__IMAGE__:{prompt}"
 
+    # --- Генерация фото Моники ---
+    if low.startswith("сфоткай ") or low.startswith("сфоткайменя ") or low.startswith("сгенерируй фото ") or low.startswith("сделай селфи"):
+        mood = "casual"
+        if any(w in low for w in ["счастлив", "радостн", "весел", "happy"]):
+            mood = "happy"
+        elif any(w in low for w in ["груст", "печал", "sad", "плач"]):
+            mood = "sad"
+        elif any(w in low for w in ["дума", "think", "мечт"]):
+            mood = "thinking"
+        elif any(w in low for w in ["готов", "cook", "кухн"]):
+            mood = "cooking"
+        elif any(w in low for w in ["пиан", "piano", "музык"]):
+            mood = "piano"
+        return f"__MONIKA_PHOTO__:{mood}"
+
     # --- Покажи себя / фото Моники ---
     if low in ("покажи себя", "покажись", "как ты выглядишь", "твое фото", "твоё фото", "фото моники", "покажи фото"):
         return "__PHOTO__"
@@ -967,8 +1020,9 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"  покажи себя — моё фото\n\n"
         f"🎤 **Голос:**\n"
         f"  пришли голосовое — я пойму\n"
-        f"  голос — отвечу голосовым\n\n"
+        f"  голос — отвечу реалистичным женским голосом\n\n"
         f"🎨 **Картинки:** нарисуй описание\n"
+        f"📸 **Моё селфи:** сфоткай happy/sad/thinking/cooking/piano\n"
         f"🌐 **Интернет:** поиск запрос\n\n"
         f"📖 Дневник:\n"
         f"  дневник заголовок: текст — записать\n"
@@ -994,8 +1048,9 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📷 Пришли фото — я опишу\n"
         "📷 покажи себя — моё фото\n"
         "🎤 Пришли голосовое — я пойму\n"
-        "🔊 голос — отвечу голосовым\n"
+        "🔊 голос — отвечу реалистичным женским голосом\n"
         "🎨 нарисуй описание — картинка\n"
+        "📸 сфоткай happy/sad/thinking/cooking/piano — моё селфи\n"
         "🌐 поиск запрос — найду в интернете\n\n"
         "📖 дневник заголовок: текст — записать\n"
         "📖 дневник — твой дневник\n"
@@ -1050,14 +1105,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         voice_text = engine.chat(user_text, max_tokens=200, temperature=0.85)
         memory.add_conversation(user_text, voice_text)
         try:
-            from gtts import gTTS
-            tts = gTTS(text=voice_text, lang="ru", tld="com")
-            mp3_buf = io.BytesIO()
-            tts.write_to_fp(mp3_buf)
-            mp3_buf.seek(0)
-            await update.message.reply_voice(voice=mp3_buf, caption=voice_text)
+            voice_file = engine.tts_realistic(voice_text)
+            with open(voice_file, "rb") as f:
+                voice_bytes = f.read()
+            await update.message.reply_voice(voice=io.BytesIO(voice_bytes), caption=voice_text)
+            os.remove(voice_file)
         except Exception as e:
-            print(f"⚠️ gTTS: {e}")
+            print(f"⚠️ TTS: {e}")
             await update.message.reply_text(voice_text)
         return
 
@@ -1102,6 +1156,27 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"Не получилось нарисовать 😅")
         return
 
+    # Генерация фото Моники
+    if reply.startswith("__MONIKA_PHOTO__:"):
+        mood = reply.split(":", 1)[1].strip()
+        print(f"📸 Генерирую фото Моники (настроение: {mood})")
+        try:
+            photo_path = engine.generate_monika_photo(mood=mood, filename=f"monika_gen_{mood}.png")
+            if os.path.exists(photo_path):
+                with open(photo_path, "rb") as f:
+                    photo_bytes = f.read()
+                await update.message.reply_photo(
+                    photo=io.BytesIO(photo_bytes),
+                    caption="Это я! 💚 Сгенерировала себя специально для тебя"
+                )
+                os.remove(photo_path)
+            else:
+                await update.message.reply_text("Не получилось сгенерировать фото 😅")
+        except Exception as e:
+            print(f"⚠️ Monika photo gen: {e}")
+            await update.message.reply_text("Не получилось сгенерировать фото 😅")
+        return
+
     # Обработка тегов [ФОТО] и [ГОЛОС] в ответе ИИ
     if "[ФОТО]" in reply.upper() or "[PHOTO]" in reply.upper():
         clean_reply = reply
@@ -1128,12 +1203,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             clean_reply = clean_reply.replace(tag, "")
         clean_reply = clean_reply.strip()
         try:
-            from gtts import gTTS
-            tts = gTTS(text=clean_reply, lang="ru", tld="com")
-            mp3_buf = io.BytesIO()
-            tts.write_to_fp(mp3_buf)
-            mp3_buf.seek(0)
-            await update.message.reply_voice(voice=mp3_buf)
+            voice_file = engine.tts_realistic(clean_reply)
+            with open(voice_file, "rb") as f:
+                voice_bytes = f.read()
+            await update.message.reply_voice(voice=io.BytesIO(voice_bytes))
+            os.remove(voice_file)
             return
         except Exception as e:
             print(f"⚠️ gTTS (тег): {e}")

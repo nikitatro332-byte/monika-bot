@@ -5,3 +5,4 @@ gtts==2.5.4
 duckduckgo-search==7.5.4
 Pillow==11.0.0
 beautifulsoup4==4.12.3
+edge-tts==7.0.0
