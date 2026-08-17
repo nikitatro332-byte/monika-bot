@@ -240,6 +240,58 @@ class AIEngine:
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"]
 
+    # ===== Gemini Vision (распознавание фото) =====
+    def vision(self, image_bytes, prompt="Опиши что на фото. Коротко, 2-3 предложения."):
+        """Распознаёт изображение через Gemini."""
+        import base64
+        b64 = base64.b64encode(image_bytes).decode()
+
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
+        payload = {
+            "contents": [{"parts": [
+                {"text": prompt},
+                {"inline_data": {"mime_type": "image/jpeg", "data": b64}}
+            ]}],
+            "generationConfig": {"temperature": 0.7, "maxOutputTokens": 300}
+        }
+        r = requests.post(url, json=payload, timeout=30, proxies=PROXY)
+        r.raise_for_status()
+        data = r.json()
+        return data["candidates"][0]["content"]["parts"][0]["text"]
+
+    # ===== Поиск в интернете (DuckDuckGo) =====
+    def web_search(self, query, max_results=5):
+        """Ищет в интернете через DuckDuckGo."""
+        try:
+            from duckduckgo_search import DDGS
+            results = []
+            with DDGS(proxy=PROXY) as ddgs:
+                for r in ddgs.text(query, max_results=max_results):
+                    results.append({"title": r["title"], "body": r["body"], "href": r["href"]})
+            return results
+        except Exception as e:
+            print(f"⚠️ Поиск: {e}")
+            return []
+
+    # ===== Генерация картинок (Pollinations.ai) =====
+    def generate_image_url(self, prompt):
+        """Возвращает URL сгенерированной картинки через Pollinations.ai."""
+        import urllib.parse
+        encoded = urllib.parse.quote(prompt)
+        return f"https://image.pollinations.ai/prompt/{encoded}?width=512&height=512&nologo=true"
+
+    # ===== Транскрипция голоса (Groq Whisper) =====
+    def transcribe_audio(self, audio_bytes, filename="audio.ogg"):
+        """Распознаёт голосовое сообщение через Groq Whisper."""
+        import io
+        url = "https://api.groq.com/openai/v1/audio/transcriptions"
+        files = {"file": (filename, io.BytesIO(audio_bytes), "audio/ogg")}
+        data = {"model": "whisper-large-v3", "language": "ru"}
+        r = requests.post(url, headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
+                          files=files, data=data, timeout=60, proxies=PROXY)
+        r.raise_for_status()
+        return r.json().get("text", "")
+
 
 # =====================================================
 # 🎭 ПОВЕДЕНИЕ МОДЕЛИ (для model_viewer.py)

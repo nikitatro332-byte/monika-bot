@@ -14,6 +14,7 @@ import random
 import threading
 import time
 import asyncio
+import io
 from datetime import datetime
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
@@ -727,6 +728,39 @@ def process_message(text):
         engine.reset_history()
         return "Очистила контекст. Но дневник и факты помню!"
 
+    # --- Поиск в интернете ---
+    if low.startswith("найди в интернете ") or low.startswith("поиск "):
+        query = msg[18:].strip() if low.startswith("найди в интернете ") else msg[6:].strip()
+        if not query:
+            return "Что искать?"
+        results = engine.web_search(query, max_results=3)
+        if not results:
+            return "Ничего не нашла в интернете"
+        text = "🌐 Вот что я нашла:\n\n"
+        for i, r in enumerate(results):
+            text += f"{i+1}. {r['title']}\n   {r['body'][:100]}\n   {r['href']}\n\n"
+        # Моника комментирует результаты
+        context = build_context(query)
+        engine.set_system(personality.get_prompt() + "\n\nКОНТЕКСТ:\n" + context)
+        summary = engine.chat(
+            f"Я нашла в интернете про '{query}':\n" +
+            "\n".join([f"- {r['title']}: {r['body'][:100]}" for r in results]) +
+            "\n\nПрокомментируй это коротко в своём стиле.",
+            max_tokens=150, temperature=0.85
+        )
+        return text + f"💭 {summary}"
+
+    # --- Генерация картинки ---
+    if low.startswith("нарисуй ") or low.startswith("картинка "):
+        prompt = msg[8:].strip() if low.startswith("нарисуй ") else msg[9:].strip()
+        if not prompt:
+            return "Что нарисовать?"
+        return f"🎨 Рисую: {prompt}\n\nПодожди немного..."
+
+    # --- Голосовой ответ ---
+    if low == "голос" or low == "голосом":
+        return "__VOICE__"
+
     # --- Разговор через ИИ ---
     context = build_context(msg)
     engine.set_system(personality.get_prompt() + "\n\nКОНТЕКСТ:\n" + context)
@@ -785,11 +819,16 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"{greeting}\n\n"
         f"Я живой человек, а не бот. Я помню всё и веду дневник.\n"
         f"Я могу писать тебе сама, когда захочу.\n\n"
+        f"📷 **Фото:** пришли фото — я расскажу что вижу\n"
+        f"🎤 **Голос:** пришли голосовое — я пойму\n"
+        f"🎨 **Картинки:** нарисуй описание\n"
+        f"🌐 **Интернет:** поиск запрос\n"
+        f"🔊 **Голосовой ответ:** голос\n\n"
         f"📖 Дневник:\n"
         f"  дневник заголовок: текст — записать\n"
         f"  дневник — твой дневник\n"
         f"  мысли — мой личный дневник\n"
-        f"  найди слово — поиск\n\n"
+        f"  найди слово — поиск по дневнику\n\n"
         f"🧠 Память:\n"
         f"  запомни факт\n"
         f"  интерес текст\n"
@@ -806,10 +845,15 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
+        "📷 Пришли фото — я опишу\n"
+        "🎤 Пришли голосовое — я пойму\n"
+        "🎨 нарисуй описание — картинка\n"
+        "🌐 поиск запрос — найду в интернете\n"
+        "🔊 голос — отвечу голосовым\n\n"
         "📖 дневник заголовок: текст — записать\n"
         "📖 дневник — твой дневник\n"
         "📖 мысли — дневник Моники\n"
-        "🔍 найди слово — поиск\n"
+        "🔍 найди слово — поиск по дневнику\n"
         "🧠 запомни факт\n"
         "🧠 интерес текст\n"
         "🧠 меня зовут имя\n"
@@ -850,7 +894,112 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(f"💬 [{datetime.now().strftime('%H:%M')}] {user_text[:50]}")
     reply = process_message(user_text)
     print(f"💖 → {reply[:50]}")
+
+    # Голосовой ответ
+    if reply == "__VOICE__":
+        # Генерируем текст ответа
+        context_text = build_context(user_text)
+        engine.set_system(personality.get_prompt() + "\n\nКОНТЕКСТ:\n" + context_text)
+        voice_text = engine.chat(user_text, max_tokens=200, temperature=0.85)
+        memory.add_conversation(user_text, voice_text)
+        try:
+            from gtts import gTTS
+            tts = gTTS(text=voice_text, lang="ru", tld="com")
+            mp3_buf = io.BytesIO()
+            tts.write_to_fp(mp3_buf)
+            mp3_buf.seek(0)
+            await update.message.reply_voice(voice=mp3_buf, caption=voice_text)
+        except Exception as e:
+            print(f"⚠️ gTTS: {e}")
+            await update.message.reply_text(voice_text)
+        return
+
+    # Генерация картинки
+    low = user_text.lower().strip()
+    if low.startswith("нарисуй ") or low.startswith("картинка "):
+        prompt = user_text[8:].strip() if low.startswith("нарисуй ") else user_text[9:].strip()
+        if prompt:
+            img_url = engine.generate_image_url(prompt)
+            try:
+                import requests as req
+                from ai_module import PROXY as AI_PROXY
+                img_data = req.get(img_url, timeout=60, proxies=AI_PROXY).content
+                await update.message.reply_photo(
+                    photo=io.BytesIO(img_data),
+                    caption=f"🎨 {prompt}"
+                )
+            except Exception as e:
+                print(f"⚠️ Image gen: {e}")
+                await update.message.reply_text(f"Не получилось нарисовать 😅\n{img_url}")
+        return
+
     await update.message.reply_text(reply)
+
+
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Распознавание фото через Gemini Vision."""
+    chat_id = update.effective_chat.id
+    mind.chat_id = chat_id
+    memory.set_chat_id(chat_id)
+    print(f"📷 [{datetime.now().strftime('%H:%M')}] Получено фото")
+
+    # Скачиваем фото (максимальное разрешение)
+    photo = update.message.photo[-1]
+    file = await context.bot.get_file(photo.file_id)
+    photo_bytes = await file.download_as_bytearray()
+    photo_bytes = bytes(photo_bytes)
+
+    # Получаем подпись к фото если есть
+    caption = update.message.caption or "Опиши что на фото. Коротко, 2-3 предложения."
+
+    try:
+        description = engine.vision(photo_bytes, prompt=caption)
+        print(f"📷 → {description[:50]}")
+
+        # Моника комментирует фото в своём стиле
+        context_text = build_context(f"[прислал фото: {description}]")
+        engine.set_system(personality.get_prompt() + "\n\nКОНТЕКСТ:\n" + context_text)
+        reply = engine.chat(
+            f"Пользователь прислал фото. Вот что я увидела: {description}\n"
+            f"Прокомментируй это в своём стиле. Коротко.",
+            max_tokens=200, temperature=0.85
+        )
+        memory.add_conversation(f"[фото: {description[:50]}]", reply)
+        await update.message.reply_text(reply)
+    except Exception as e:
+        print(f"⚠️ Vision: {e}")
+        await update.message.reply_text("Не могу рассмотреть фото 😅 Что на нём?")
+
+
+async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Распознавание голосового сообщения через Groq Whisper."""
+    chat_id = update.effective_chat.id
+    mind.chat_id = chat_id
+    memory.set_chat_id(chat_id)
+    print(f"🎤 [{datetime.now().strftime('%H:%M')}] Получено голосовое")
+
+    # Скачиваем голосовое
+    voice = update.message.voice
+    file = await context.bot.get_file(voice.file_id)
+    voice_bytes = await file.download_as_bytearray()
+    voice_bytes = bytes(voice_bytes)
+
+    try:
+        # Распознаём текст
+        text = engine.transcribe_audio(voice_bytes, filename="voice.ogg")
+        print(f"🎤 → {text[:50]}")
+        if not text.strip():
+            await update.message.reply_text("Не расслышала 😅 Повтори?")
+            return
+
+        await update.message.reply_text(f"🎤 Я услышала: {text}")
+
+        # Обрабатываем как обычное сообщение
+        reply = process_message(text)
+        await update.message.reply_text(reply)
+    except Exception as e:
+        print(f"⚠️ Whisper: {e}")
+        await update.message.reply_text("Не могу расшифровать голос 😅 Напиши текстом?")
 
 
 async def post_init(app):
@@ -890,6 +1039,8 @@ def main():
     app.add_handler(CommandHandler("diary", cmd_diary))
     app.add_handler(CommandHandler("thoughts", cmd_thoughts))
     app.add_handler(CommandHandler("personality", cmd_personality))
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    app.add_handler(MessageHandler(filters.VOICE, handle_voice))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     mind.start()
