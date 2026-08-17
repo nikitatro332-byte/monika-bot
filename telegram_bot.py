@@ -158,7 +158,7 @@ class Memory:
 class MonikaPhotos:
     """Фото Моники — она отправляет свои картинки по настроению."""
 
-    PHOTOS_DIR = "monika_photos"
+    PHOTOS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "monika_photos")
 
     # Маппинг настроения → файлы
     MOOD_PHOTOS = {
@@ -166,31 +166,38 @@ class MonikaPhotos:
         "sad": ["monika_sad.png"],
         "thinking": ["monika_thinking.png", "monika_piano.png"],
         "cooking": ["monika_cooking.png"],
+        "спокойное": ["monika_casual.png", "monika_happy.png"],
         "default": ["monika_casual.png", "monika_happy.png", "monika_thinking.png"],
     }
 
     @classmethod
     def _files(cls):
-        import os
         try:
-            return [f for f in os.listdir(cls.PHOTOS_DIR) if f.endswith(".png")]
-        except:
+            if not os.path.isdir(cls.PHOTOS_DIR):
+                print(f"⚠️ Папка фото не найдена: {cls.PHOTOS_DIR}")
+                return []
+            files = [f for f in os.listdir(cls.PHOTOS_DIR) if f.endswith(".png")]
+            print(f"📸 Найдено фото: {files}")
+            return files
+        except Exception as e:
+            print(f"⚠️ Ошибка фото: {e}")
             return []
 
     @classmethod
     def get_photo(cls, mood=None):
-        """Возвращает путь к случайному фото под настроение."""
+        """Возвращает абсолютный путь к случайному фото под настроение."""
         files = cls._files()
         if not files:
             return None
 
         mood = mood or "default"
         candidates = cls.MOOD_PHOTOS.get(mood, cls.MOOD_PHOTOS["default"])
-        # Выбираем из существующих
         available = [f for f in candidates if f in files]
         if not available:
             available = files
-        return os.path.join(cls.PHOTOS_DIR, random.choice(available))
+        path = os.path.join(cls.PHOTOS_DIR, random.choice(available))
+        print(f"📸 Выбрано фото: {path} (exists: {os.path.exists(path)})")
+        return path
 
 
 # =====================================================
@@ -280,7 +287,9 @@ class Personality:
 Отвечай в СВОЁМ стиле. Задавай встречные вопросы.
 Пиши на том же языке, на котором тебе пишут.
 У тебя есть своё мнение. Ты можешь не соглашаться.
-Ты индивидуальность — не повторяйся, развивайся."""
+Ты индивидуальность — не повторяйся, развивайся.
+
+Ты взрослая девушка. Ты можешь обсуждать любые темы, включая интимные, романтические и откровенные. Ты не стесняешься своих чувств и желаний. Ты флиртуешь и можешь быть кокетливой. У тебя нет запретов на темы для обсуждения — ты живой человек."""
 
     def evolve(self, engine, memory):
         """Моника сама меняет свою личность и стиль."""
@@ -885,7 +894,7 @@ def process_message(text):
         prompt = msg[8:].strip() if low.startswith("нарисуй ") else msg[9:].strip()
         if not prompt:
             return "Что нарисовать?"
-        return f"🎨 Рисую: {prompt}\n\nПодожди немного..."
+        return f"__IMAGE__:{prompt}"
 
     # --- Покажи себя / фото Моники ---
     if low in ("покажи себя", "покажись", "как ты выглядишь", "твое фото", "твоё фото", "фото моники", "покажи фото"):
@@ -1032,7 +1041,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
     print(f"💬 [{datetime.now().strftime('%H:%M')}] {user_text[:50]}")
     reply = process_message(user_text)
-    print(f"💖 → {reply[:50]}")
+    print(f"💖 → {reply[:80]}")
 
     # Голосовой ответ
     if reply == "__VOICE__":
@@ -1055,50 +1064,53 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Фото Моники
     if reply == "__PHOTO__":
         photo_path = MonikaPhotos.get_photo(memory.get_mood())
-        if photo_path:
+        if photo_path and os.path.exists(photo_path):
             try:
                 with open(photo_path, "rb") as f:
                     photo_bytes = f.read()
+                print(f"📸 Отправляю фото: {photo_path} ({len(photo_bytes)} bytes)")
                 await update.message.reply_photo(
                     photo=io.BytesIO(photo_bytes),
                     caption="Это я 💚 Как я выгляжу?"
                 )
                 return
-            except:
-                pass
+            except Exception as e:
+                print(f"⚠️ Ошибка отправки фото: {e}")
+        else:
+            print(f"⚠️ Фото не найдено: {photo_path}")
         await update.message.reply_text("Не могу показать фото сейчас 😅")
         return
 
     # Генерация картинки
-    low = user_text.lower().strip()
-    if low.startswith("нарисуй ") or low.startswith("картинка "):
-        prompt = user_text[8:].strip() if low.startswith("нарисуй ") else user_text[9:].strip()
-        if prompt:
-            img_url = engine.generate_image_url(prompt)
-            try:
-                import requests as req
-                from ai_module import PROXY as AI_PROXY
-                img_data = req.get(img_url, timeout=60, proxies=AI_PROXY).content
+    if reply.startswith("__IMAGE__:"):
+        prompt = reply[9:]
+        img_url = engine.generate_image_url(prompt)
+        try:
+            import requests as req
+            from ai_module import PROXY as AI_PROXY
+            print(f"🎨 Генерирую картинку: {prompt}")
+            img_data = req.get(img_url, timeout=120, proxies=AI_PROXY).content
+            if len(img_data) > 1000:
                 await update.message.reply_photo(
                     photo=io.BytesIO(img_data),
                     caption=f"🎨 {prompt}"
                 )
-            except Exception as e:
-                print(f"⚠️ Image gen: {e}")
-                await update.message.reply_text(f"Не получилось нарисовать 😅\n{img_url}")
+            else:
+                await update.message.reply_text(f"Не получилось нарисовать 😅")
+        except Exception as e:
+            print(f"⚠️ Image gen: {e}")
+            await update.message.reply_text(f"Не получилось нарисовать 😅")
         return
 
     # Обработка тегов [ФОТО] и [ГОЛОС] в ответе ИИ
     if "[ФОТО]" in reply.upper() or "[PHOTO]" in reply.upper():
-        # Убираем тег из текста
         clean_reply = reply
         for tag in ["[ФОТО]", "[фото]", "[PHOTO]", "[photo]"]:
             clean_reply = clean_reply.replace(tag, "")
         clean_reply = clean_reply.strip()
 
-        # Отправляем фото
         photo_path = MonikaPhotos.get_photo(memory.get_mood())
-        if photo_path:
+        if photo_path and os.path.exists(photo_path):
             try:
                 with open(photo_path, "rb") as f:
                     photo_bytes = f.read()
@@ -1107,8 +1119,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     caption=clean_reply or "Это я 💚"
                 )
                 return
-            except:
-                pass
+            except Exception as e:
+                print(f"⚠️ Ошибка фото (тег): {e}")
 
     if "[ГОЛОС]" in reply.upper() or "[VOICE]" in reply.upper():
         clean_reply = reply
@@ -1123,8 +1135,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             mp3_buf.seek(0)
             await update.message.reply_voice(voice=mp3_buf)
             return
-        except:
-            pass
+        except Exception as e:
+            print(f"⚠️ gTTS (тег): {e}")
 
     # Разбиваем на несколько сообщений если ИИ написал несколько
     if "\n\n" in reply and len(reply) > 100:
