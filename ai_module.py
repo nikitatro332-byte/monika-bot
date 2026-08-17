@@ -242,11 +242,11 @@ class AIEngine:
 
     # ===== Gemini Vision (распознавание фото) =====
     def vision(self, image_bytes, prompt="Опиши что на фото. Коротко, 2-3 предложения."):
-        """Распознаёт изображение через Gemini."""
+        """Распознаёт изображение через Gemini (с ретраями)."""
         import base64
         b64 = base64.b64encode(image_bytes).decode()
 
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={GEMINI_API_KEY}"
         payload = {
             "contents": [{"parts": [
                 {"text": prompt},
@@ -254,24 +254,66 @@ class AIEngine:
             ]}],
             "generationConfig": {"temperature": 0.7, "maxOutputTokens": 300}
         }
-        r = requests.post(url, json=payload, timeout=30, proxies=PROXY)
-        r.raise_for_status()
-        data = r.json()
-        return data["candidates"][0]["content"]["parts"][0]["text"]
+
+        last_err = None
+        for attempt in range(3):
+            try:
+                r = requests.post(url, json=payload, timeout=30, proxies=PROXY)
+                if r.status_code == 200:
+                    data = r.json()
+                    return data["candidates"][0]["content"]["parts"][0]["text"]
+                elif r.status_code in (429, 500, 503):
+                    last_err = f"{r.status_code}"
+                    time.sleep(2 * (attempt + 1))
+                else:
+                    r.raise_for_status()
+            except Exception as e:
+                last_err = str(e)
+                time.sleep(2 * (attempt + 1))
+
+        raise Exception(f"Gemini Vision недоступен: {last_err}")
 
     # ===== Поиск в интернете (DuckDuckGo) =====
     def web_search(self, query, max_results=5):
         """Ищет в интернете через DuckDuckGo."""
+        results = []
+        proxy_str = None
+        if PROXY:
+            proxy_str = PROXY.get("https") or PROXY.get("http")
+
+        # Попытка 1: duckduckgo_search (DDGS)
         try:
             from duckduckgo_search import DDGS
-            results = []
-            with DDGS(proxy=PROXY) as ddgs:
+            with DDGS(proxy=proxy_str) as ddgs:
                 for r in ddgs.text(query, max_results=max_results):
                     results.append({"title": r["title"], "body": r["body"], "href": r["href"]})
-            return results
+            if results:
+                return results
         except Exception as e:
-            print(f"⚠️ Поиск: {e}")
-            return []
+            print(f"⚠️ Поиск DDGS: {e}")
+
+        # Попытка 2: прямой запрос к DuckDuckGo HTML
+        try:
+            import requests as req
+            from urllib.parse import quote
+            from bs4 import BeautifulSoup
+            url = f"https://html.duckduckgo.com/html/?q={quote(query)}"
+            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+            r = req.get(url, timeout=20, proxies=PROXY, headers=headers)
+            soup = BeautifulSoup(r.text, "html.parser")
+            for item in soup.select(".result__body")[:max_results]:
+                title_tag = item.select_one(".result__a")
+                snippet_tag = item.select_one(".result__snippet")
+                if title_tag:
+                    results.append({
+                        "title": title_tag.get_text(strip=True),
+                        "body": snippet_tag.get_text(strip=True) if snippet_tag else "",
+                        "href": title_tag.get("href", "")
+                    })
+        except Exception as e:
+            print(f"⚠️ Поиск HTML: {e}")
+
+        return results
 
     # ===== Генерация картинок (Pollinations.ai) =====
     def generate_image_url(self, prompt):
