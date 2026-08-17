@@ -426,43 +426,26 @@ class AIEngine:
         r.raise_for_status()
         return r.json().get("text", "")
 
-    # ===== TTS (edge-tts → gTTS fallback) =====
+    # ===== TTS (gTTS natural → fallback) =====
     async def tts_realistic(self, text, filename=None, as_ogg=True):
-        """Генерирует голос через edge-tts (человеческий) → gTTS fallback."""
+        """Генерирует голос через gTTS с естественной скоростью."""
         safe_name = filename or f"voice_{uuid.uuid4().hex}"
         base_dir = os.path.dirname(os.path.abspath(__file__))
         mp3_path = os.path.join(base_dir, f"{safe_name}.mp3")
         out_path = os.path.join(base_dir, f"{safe_name}.ogg")
 
-        # 1) edge-tts — человеческий голос (работает на Render в США)
+        # gTTS — slow=True для более естественной речи
         try:
-            import edge_tts
-            communicate = edge_tts.Communicate(
-                text, "ru-RU-SvetlanaNeural",
-                rate="-8%", pitch="-3Hz"
-            )
-            await communicate.save(mp3_path)
-            if os.path.exists(mp3_path) and os.path.getsize(mp3_path) > 500:
-                print(f"🎤 edge-tts OK: {os.path.getsize(mp3_path)} bytes")
-            else:
-                raise Exception("пустой файл")
+            from gtts import gTTS
+            clean_text = text.replace("\n", " ").replace("\r", " ")
+            tts = gTTS(text=clean_text, lang="ru", tld="com", slow=True)
+            tts.save(mp3_path)
+            if not os.path.exists(mp3_path) or os.path.getsize(mp3_path) < 500:
+                raise Exception("gTTS вернул пустой файл")
+            print(f"🎤 gTTS natural: {os.path.getsize(mp3_path)} bytes")
         except Exception as e:
-            print(f"⚠️ edge-tts: {e}")
-
-        # 2) gTTS fallback — принудительно русский
-        if not os.path.exists(mp3_path) or os.path.getsize(mp3_path) < 500:
-            try:
-                from gtts import gTTS
-                # Очищаем текст от спецсимволов
-                clean_text = text.replace("\n", " ").replace("\r", " ")
-                tts = gTTS(text=clean_text, lang="ru", tld="com", slow=False)
-                tts.save(mp3_path)
-                if not os.path.exists(mp3_path) or os.path.getsize(mp3_path) < 500:
-                    raise Exception("gTTS вернул пустой файл")
-                print(f"🎤 gTTS fallback: {os.path.getsize(mp3_path)} bytes")
-            except Exception as e:
-                print(f"⚠️ gTTS: {e}")
-                return None
+            print(f"⚠️ gTTS: {e}")
+            return None
 
         if as_ogg and os.path.exists(mp3_path):
             try:
