@@ -1,4 +1,3 @@
-```
 """
 💖 Моника — Telegram бот с ИИ, памятью, дневником и саморазвитием
 Использует ai_module.py (Groq llama-3.3-70b / Gemini / OpenRouter)
@@ -890,5 +889,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-```
