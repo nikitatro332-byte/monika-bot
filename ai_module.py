@@ -426,34 +426,53 @@ class AIEngine:
         r.raise_for_status()
         return r.json().get("text", "")
 
-    # ===== TTS (Fish Audio → gTTS fallback) =====
+    # ===== TTS (TTS.quest VoiceVox → gTTS fallback) =====
     async def tts_realistic(self, text, filename=None, as_ogg=True):
-        """Генерирует голос через Fish Audio (клонирование) → gTTS fallback."""
+        """Генерирует голос через TTS.quest (VoiceVox) → gTTS fallback."""
         safe_name = filename or f"voice_{uuid.uuid4().hex}"
         base_dir = os.path.dirname(os.path.abspath(__file__))
         mp3_path = os.path.join(base_dir, f"{safe_name}.mp3")
         out_path = os.path.join(base_dir, f"{safe_name}.ogg")
 
-        # 1) Fish Audio — клонирование голоса
-        fish_key = os.environ.get("FISH_AUDIO_API_KEY", "")
-        if fish_key:
-            try:
-                import requests as req
-                r = req.post(
-                    "https://api.fish.audio/v1/tts",
-                    headers={"Authorization": f"Bearer {fish_key}", "Content-Type": "application/json"},
-                    json={"text": text, "reference_id": None},
-                    timeout=30
-                )
-                if r.status_code == 200:
+        # 1) TTS.quest — VoiceVox
+        tts_key = os.environ.get("TTS_API_KEY", "x14_3-a5p-72M62")
+        try:
+            import requests as req
+            import time
+
+            # Запускаем синтез
+            r = req.get(
+                "https://api.tts.quest/v3/voicevox/synthesis",
+                params={"text": text, "speaker": 3, "key": tts_key},
+                timeout=15
+            )
+            data = r.json()
+
+            if data.get("success"):
+                # Ждём готовности
+                max_wait = 30
+                waited = 0
+                while waited < max_wait:
+                    status = req.get(data["audioStatusUrl"], timeout=10).json()
+                    if status.get("isAudioReady"):
+                        break
+                    time.sleep(0.5)
+                    waited += 0.5
+
+                if status.get("isAudioReady"):
+                    audio = req.get(data["mp3DownloadUrl"], timeout=15)
                     with open(mp3_path, "wb") as f:
-                        f.write(r.content)
+                        f.write(audio.content)
                     if os.path.exists(mp3_path) and os.path.getsize(mp3_path) > 500:
-                        print(f"🎤 Fish Audio OK: {os.path.getsize(mp3_path)} bytes")
+                        print(f"🎤 TTS.quest OK: {os.path.getsize(mp3_path)} bytes")
+                    else:
+                        raise Exception("TTS.quest вернул пустой файл")
                 else:
-                    print(f"⚠️ Fish Audio: {r.status_code} — {r.text[:200]}")
-            except Exception as e:
-                print(f"⚠️ Fish Audio: {e}")
+                    raise Exception("TTS.quest timeout")
+            else:
+                raise Exception(f"TTS.quest: {data}")
+        except Exception as e:
+            print(f"⚠️ TTS.quest: {e}")
 
         # 2) gTTS fallback
         if not os.path.exists(mp3_path) or os.path.getsize(mp3_path) < 500:
