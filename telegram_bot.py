@@ -699,19 +699,21 @@ EVOLVE
             print(f"⚠️ Ошибка фото: {e}")
 
     def _send_voice(self, text):
-        """Отправляет голосовое сообщение."""
+        """Отправляет голосовое сообщение (sync, вызывается из потока)."""
         if not self.bot_app or not self.chat_id or not self.event_loop:
             return
         voice_file = None
         try:
-            voice_file = self.engine.tts_realistic(text)
+            coro = self.engine.tts_realistic(text)
+            future = asyncio.run_coroutine_threadsafe(coro, self.event_loop)
+            voice_file = future.result(timeout=60)
             with open(voice_file, "rb") as f:
                 voice_bytes = f.read()
-            future = asyncio.run_coroutine_threadsafe(
+            send_future = asyncio.run_coroutine_threadsafe(
                 self.bot_app.bot.send_voice(self.chat_id, voice=io.BytesIO(voice_bytes)),
                 self.event_loop
             )
-            future.result(timeout=30)
+            send_future.result(timeout=30)
         except Exception as e:
             print(f"⚠️ Ошибка голоса: {e}")
         finally:
@@ -1151,15 +1153,23 @@ async def dispatch_reply(update, reply, user_text=""):
         voice_text = _clean_command_prefixes(voice_text)
         memory.add_conversation(user_text, voice_text)
         try:
-            voice_file = await asyncio.to_thread(engine.tts_realistic, voice_text)
+            print(f"🎤 TTS start: {len(voice_text)} chars")
+            voice_file = await engine.tts_realistic(voice_text)
+            print(f"🎤 TTS file: {voice_file}")
+            if not voice_file or not os.path.exists(voice_file):
+                raise Exception(f"TTS вернул несуществующий файл: {voice_file}")
             with open(voice_file, "rb") as f:
                 voice_bytes = f.read()
+            print(f"🎤 TTS bytes: {len(voice_bytes)}")
             sent = await _send_voice_bytes(update, voice_bytes, voice_text)
             if not sent:
+                print("⚠️ sendVoice не сработал, отправляю текст")
                 await update.message.reply_text(voice_text)
             os.remove(voice_file)
         except Exception as e:
-            print(f"⚠️ TTS: {e}")
+            import traceback
+            print(f"⚠️ TTS ERROR: {e}")
+            traceback.print_exc()
             await update.message.reply_text(voice_text)
         return
 
@@ -1252,16 +1262,24 @@ async def dispatch_reply(update, reply, user_text=""):
             clean_reply = clean_reply.replace(tag, "")
         clean_reply = _clean_command_prefixes(clean_reply)
         try:
-            voice_file = await asyncio.to_thread(engine.tts_realistic, clean_reply)
+            print(f"🎤 TTS tag: {len(clean_reply)} chars")
+            voice_file = await engine.tts_realistic(clean_reply)
+            print(f"🎤 TTS file: {voice_file}")
+            if not voice_file or not os.path.exists(voice_file):
+                raise Exception(f"TTS вернул несуществующий файл: {voice_file}")
             with open(voice_file, "rb") as f:
                 voice_bytes = f.read()
+            print(f"🎤 TTS bytes: {len(voice_bytes)}")
             sent = await _send_voice_bytes(update, voice_bytes)
             if not sent:
+                print("⚠️ sendVoice не сработал, отправляю текст")
                 await update.message.reply_text(clean_reply)
             os.remove(voice_file)
             return
         except Exception as e:
-            print(f"⚠️ TTS (тег): {e}")
+            import traceback
+            print(f"⚠️ TTS (тег) ERROR: {e}")
+            traceback.print_exc()
 
     # Разбиваем на несколько сообщений если ИИ написал несколько
     if "\n\n" in reply and len(reply) > 100:

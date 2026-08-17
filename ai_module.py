@@ -426,8 +426,8 @@ class AIEngine:
         r.raise_for_status()
         return r.json().get("text", "")
 
-    # ===== Реалистичный женский TTS (edge-tts → gTTS, с конвертацией в OGG) =====
-    def tts_realistic(self, text, filename=None, as_ogg=True):
+    # ===== Реалистичный женский TTS (async edge-tts → gTTS, конвертация в OGG) =====
+    async def tts_realistic(self, text, filename=None, as_ogg=True):
         """
         Генерирует женский голос и конвертирует в OGG Opus (для Telegram voice).
         Приоритет: edge-tts (реалистичный нейроголос) → gTTS (роботизированный fallback).
@@ -438,50 +438,29 @@ class AIEngine:
         mp3_path = os.path.join(base_dir, f"{safe_name}.mp3")
         out_path = os.path.join(base_dir, f"{safe_name}.ogg")
 
-        # 1) edge-tts — реалистичный нейроголос (работает на Render/облаке, в РФ заблокирован)
+        # 1) edge-tts — реалистичный нейроголос
         try:
-            asyncio.get_running_loop()
-            in_async = True
-        except RuntimeError:
-            in_async = False
-
-        if not in_async:
-            try:
-                import edge_tts
-                async def _synthesize():
-                    communicate = edge_tts.Communicate(
-                        text, "ru-RU-SvetlanaNeural", rate="-8%", pitch="-3Hz"
-                    )
-                    await communicate.save(mp3_path)
-
-                asyncio.run(_synthesize())
-                if os.path.exists(mp3_path) and os.path.getsize(mp3_path) > 500:
-                    print(f"🎤 edge-tts OK (реалистичный): {os.path.getsize(mp3_path)} bytes")
-                else:
-                    raise Exception("edge-tts вернул пустой файл")
-            except Exception as e:
-                print(f"⚠️ edge-tts: {e}")
-                # 2) gTTS — надёжный fallback
-                try:
-                    from gtts import gTTS
-                    tts = gTTS(text=text, lang="ru", tld="com")
-                    tts.save(mp3_path)
-                    if not os.path.exists(mp3_path) or os.path.getsize(mp3_path) < 500:
-                        raise Exception("gTTS вернул пустой файл")
-                    print(f"🎤 gTTS OK (fallback): {os.path.getsize(mp3_path)} bytes")
-                except Exception as e2:
-                    print(f"⚠️ gTTS тоже упал: {e2}")
-        else:
-            # В async-контексте edge-tts не может запустить asyncio.run — сразу gTTS
+            import edge_tts
+            communicate = edge_tts.Communicate(
+                text, "ru-RU-SvetlanaNeural", rate="-8%", pitch="-3Hz"
+            )
+            await communicate.save(mp3_path)
+            if os.path.exists(mp3_path) and os.path.getsize(mp3_path) > 500:
+                print(f"🎤 edge-tts OK (реалистичный): {os.path.getsize(mp3_path)} bytes")
+            else:
+                raise Exception("edge-tts вернул пустой файл")
+        except Exception as e:
+            print(f"⚠️ edge-tts: {e}")
+            # 2) gTTS — надёжный fallback
             try:
                 from gtts import gTTS
                 tts = gTTS(text=text, lang="ru", tld="com")
                 tts.save(mp3_path)
                 if not os.path.exists(mp3_path) or os.path.getsize(mp3_path) < 500:
                     raise Exception("gTTS вернул пустой файл")
-                print(f"🎤 gTTS OK (async fallback): {os.path.getsize(mp3_path)} bytes")
+                print(f"🎤 gTTS OK (fallback): {os.path.getsize(mp3_path)} bytes")
             except Exception as e2:
-                print(f"⚠️ gTTS упал: {e2}")
+                print(f"⚠️ gTTS тоже упал: {e2}")
 
         if as_ogg and os.path.exists(mp3_path):
             try:
