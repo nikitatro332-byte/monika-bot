@@ -16,3 +16,6 @@ monika_bot.log
 xray/xray.log
 nssm.exe
 nssm.exe.zip
+_render_*.py
+_test_*.py
+_check_*.py
