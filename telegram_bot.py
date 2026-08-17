@@ -20,6 +20,7 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 from ai_module import AIEngine, MODELS
+from voice_library import voice_library
 
 # =====================================================
 # 🌐 KEEP-ALIVE ВЕБ-СЕРВЕР (чтобы Render не засыпал)
@@ -1161,6 +1162,23 @@ async def dispatch_reply(update, reply, user_text=""):
         voice_text = engine.chat(user_text, max_tokens=200, temperature=0.85)
         voice_text = _clean_command_prefixes(voice_text)
         memory.add_conversation(user_text, voice_text)
+        
+        # 1) Пробуем готовую запись из библиотеки
+        mood = memory.get_mood()
+        voice_file = voice_library.get_voice(mood=mood)
+        if voice_file and os.path.exists(voice_file):
+            try:
+                with open(voice_file, "rb") as f:
+                    voice_bytes = f.read()
+                print(f"🎤 Готовое голосовое: {os.path.basename(voice_file)} ({len(voice_bytes)} bytes)")
+                sent = await _send_voice_bytes(update, voice_bytes, voice_text)
+                if not sent:
+                    await update.message.reply_text(voice_text)
+                return
+            except Exception as e:
+                print(f"⚠️ Готовое голосовое не сработало: {e}")
+        
+        # 2) Fallback — генерируем через TTS
         try:
             print(f"🎤 TTS start: {len(voice_text)} chars")
             voice_file = await engine.tts_realistic(voice_text)
