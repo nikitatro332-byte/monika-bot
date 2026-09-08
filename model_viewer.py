@@ -386,7 +386,7 @@ class ModelWin(QWidget):
 class MainWin(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Моника")
+        self.setWindowTitle("Хори Кёко")
         self.setGeometry(100, 100, 250, 150)
         self.setStyleSheet("background: #0d0d11; border-radius: 12px;")
 
@@ -395,7 +395,7 @@ class MainWin(QMainWindow):
         l = QVBoxLayout(c)
         l.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        l.addWidget(QLabel("💖 Моника", alignment=Qt.AlignmentFlag.AlignCenter,
+        l.addWidget(QLabel("💖 Хори Кёко", alignment=Qt.AlignmentFlag.AlignCenter,
                            styleSheet="color:#007aff;font-size:24px;font-weight:bold;"))
 
         btn = QPushButton("👁️ Показать")

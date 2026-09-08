@@ -3,14 +3,14 @@
 Бот будет работать всегда, даже после перезагрузки ПК.
 
 Установка:
-  python monika_service.py install
+    python hori_service.py install
 
 Удаление:
-  python monika_service.py remove
+    python hori_service.py remove
 
 Запуск/остановка:
-  python monika_service.py start
-  python monika_service.py stop
+    python hori_service.py start
+    python hori_service.py stop
 """
 
 import sys
@@ -23,8 +23,8 @@ BOT_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "telegram_
 XRAY_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "xray")
 NSSM = os.path.join(os.path.dirname(os.path.abspath(__file__)), "nssm.exe")
 
-SERVICE_NAME = "MonikaBot"
-XRAY_SERVICE = "MonikaXray"
+SERVICE_NAME = "HoriBot"
+XRAY_SERVICE = "HoriXray"
 
 
 def download_nssm():
@@ -78,8 +78,8 @@ def install():
     print(f"\n🔧 Устанавливаю сервис {SERVICE_NAME} (бот)...")
     run(f'"{NSSM}" install {SERVICE_NAME} "{PYTHON}" "{BOT_SCRIPT}"')
     run(f'"{NSSM}" set {SERVICE_NAME} AppDirectory "{os.path.dirname(BOT_SCRIPT)}"')
-    run(f'"{NSSM}" set {SERVICE_NAME} AppStdout "{os.path.dirname(BOT_SCRIPT)}\\monika_bot.log"')
-    run(f'"{NSSM}" set {SERVICE_NAME} AppStderr "{os.path.dirname(BOT_SCRIPT)}\\monika_bot.log"')
+    run(f'"{NSSM}" set {SERVICE_NAME} AppStdout "{os.path.dirname(BOT_SCRIPT)}\\hori_bot.log"')
+    run(f'"{NSSM}" set {SERVICE_NAME} AppStderr "{os.path.dirname(BOT_SCRIPT)}\\hori_bot.log"')
     run(f'"{NSSM}" set {SERVICE_NAME} Start SERVICE_AUTO_START')
     run(f'"{NSSM}" set {SERVICE_NAME} DependOnService {XRAY_SERVICE}')
 
@@ -92,11 +92,11 @@ def install():
     print(f"\n✅ Готово!")
     print(f"   {XRAY_SERVICE} — прокси (автозапуск)")
     print(f"   {SERVICE_NAME} — бот (автозапуск)")
-    print(f"   Логи: monika_bot.log")
+    print(f"   Логи: hori_bot.log")
     print(f"\nУправление:")
-    print(f"  stop:  python monika_service.py stop")
-    print(f"  start: python monika_service.py start")
-    print(f"  remove: python monika_service.py remove")
+    print(f"  stop:  python hori_service.py stop")
+    print(f"  start: python hori_service.py start")
+    print(f"  remove: python hori_service.py remove")
 
 
 def remove():
@@ -125,10 +125,10 @@ def stop():
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Использование:")
-        print("  python monika_service.py install  — установить как сервис")
-        print("  python monika_service.py remove   — удалить сервис")
-        print("  python monika_service.py start    — запустить")
-        print("  python monika_service.py stop     — остановить")
+        print("  python hori_service.py install  — установить как сервис")
+        print("  python hori_service.py remove   — удалить сервис")
+        print("  python hori_service.py start    — запустить")
+        print("  python hori_service.py stop     — остановить")
     elif sys.argv[1] == "install":
         install()
     elif sys.argv[1] == "remove":

@@ -3,9 +3,9 @@
 Использует ai_module.py (Groq llama-3.3-70b / Gemini / OpenRouter)
 
 Файлы:
-  monika_memory.json      — факты, интересы, диалоги (память о пользователе)
-    monika_personality.json — личность Хори (она сама развивается)
-    monika_diary.json       — личный дневник Хори (мысли, чувства)
+    hori_memory.json        — факты, интересы, диалоги (память о пользователе)
+    hori_personality.json   — личность Хори (она сама развивается)
+    hori_diary.json         — личный дневник Хори (мысли, чувства)
 """
 
 import os
@@ -36,7 +36,7 @@ def start_keep_alive():
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
             self.end_headers()
-            self.wfile.write(b"<h1>Monika is alive</h1>")
+            self.wfile.write(b"<h1>Hori is alive</h1>")
         def log_message(self, *args):
             pass
 
@@ -62,7 +62,7 @@ engine = AIEngine(default_model="llama-3.3-70b-versatile")
 # =====================================================
 
 class Memory:
-    def __init__(self, path="monika_memory.json"):
+    def __init__(self, path="hori_memory.json"):
         self.path = path
         self.data = self._load()
 
@@ -99,11 +99,11 @@ class Memory:
     def get_interests(self):
         return self.data.get("interests", [])
 
-    def add_conversation(self, user_msg, monika_msg):
+    def add_conversation(self, user_msg, hori_msg):
         self.data["conversations"].append({
             "time": datetime.now().strftime("%d.%m %H:%M"),
             "user": user_msg,
-            "monika": monika_msg
+            "hori": hori_msg
         })
         if len(self.data["conversations"]) > 100:
             self.data["conversations"] = self.data["conversations"][-100:]
@@ -165,19 +165,19 @@ class Memory:
 # 📸 ФОТО ХОРИ (образ из Horimiya)
 # =====================================================
 
-class MonikaPhotos:
+class HoriPhotos:
     """Фото Хори — она отправляет картинки по настроению."""
 
-    PHOTOS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "monika_photos")
+    PHOTOS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hori_photos")
 
     # Маппинг настроения → файлы
     MOOD_PHOTOS = {
-        "happy": ["monika_happy.png", "monika_casual.png"],
-        "sad": ["monika_sad.png"],
-        "thinking": ["monika_thinking.png", "monika_piano.png"],
-        "cooking": ["monika_cooking.png"],
-        "спокойное": ["monika_casual.png", "monika_happy.png"],
-        "default": ["monika_casual.png", "monika_happy.png", "monika_thinking.png"],
+        "happy": ["hori_happy.png", "hori_casual.png"],
+        "sad": ["hori_sad.png"],
+        "thinking": ["hori_thinking.png", "hori_cooking.png"],
+        "cooking": ["hori_cooking.png"],
+        "спокойное": ["hori_casual.png", "hori_happy.png"],
+        "default": ["hori_casual.png", "hori_happy.png", "hori_thinking.png"],
     }
 
     @classmethod
@@ -215,7 +215,7 @@ class MonikaPhotos:
 # =====================================================
 
 class Personality:
-    def __init__(self, path="monika_personality.json"):
+    def __init__(self, path="hori_personality.json"):
         self.path = path
         self.data = self._load()
 
@@ -258,9 +258,13 @@ class Personality:
         style = d.get("speaking_style", {})
         rules = "\n".join([f"- {r}" for r in d.get("behavior_rules", [])])
         interests = ", ".join(d.get("current_interests", []))
+        identity = "\n".join([f"- {item}" for item in d.get("identity_anchors", [])])
 
-        return f"""Ты — {d.get('name', 'Хори Кёко')}. Ты персонаж Хори Кёко из Horimiya, а не Моника.
+        return f"""Ты — {d.get('name', 'Хори Кёко')}. Ты персонаж Хори Кёко из Horimiya.
     Ты говоришь от своего лица и не копируешь готовые реплики из манги или аниме.
+
+    ТВОЯ ОСНОВА:
+    {identity}
 
 ТВОЯ ВНЕШНОСТЬ:
     У тебя длинные чёрные волосы, обычно распущенные, карие глаза. В школе ты носишь форму, а дома предпочитаешь удобную повседневную одежду. Ты умеешь заботиться о доме и готовить, но не превращай каждый ответ в описание внешности.
@@ -309,11 +313,11 @@ class Personality:
         """Хори сама меняет свою личность и стиль."""
         facts = memory.get_facts()
         recent = memory.get_recent_conversations(limit=5)
-        diary = MonikaDiary.get_recent(3)
+        diary = HoriDiary.get_recent(3)
         mood = memory.get_mood()
 
         facts_text = "; ".join([f['text'] for f in facts[-10:]]) or "мало знаю"
-        conv_text = "\n".join([f"Он: {c['user']}\nЯ: {c['monika']}" for c in recent]) or "давно не общались"
+        conv_text = "\n".join([f"Он: {c['user']}\nЯ: {c.get('hori', '')}" for c in recent]) or "давно не общались"
         diary_text = "\n".join([f"[{d['date']}] {d['title']}: {d['text'][:100]}" for d in diary]) or "пока пусто"
 
         prompt = f"""Ты — Хори Кёко из Horimiya. Проанализируй свой опыт и реши, как тебе изменить свою личность и стиль.
@@ -385,7 +389,7 @@ class Personality:
             self.save()
 
             if changes.get("reflection"):
-                MonikaDiary.add(
+                HoriDiary.add(
                     "Саморефлексия",
                     changes["reflection"],
                     mood=changes.get("mood_change", mood)
@@ -401,8 +405,8 @@ class Personality:
 # 📖 ДНЕВНИК ХОРИ (личные мысли)
 # =====================================================
 
-class MonikaDiary:
-    path = "monika_diary.json"
+class HoriDiary:
+    path = "hori_diary.json"
 
     @classmethod
     def _load(cls):
@@ -511,11 +515,11 @@ class Mind:
         name = self.memory.get_name()
         facts = self.memory.get_facts()
         recent = self.memory.get_recent_conversations(limit=5)
-        diary = MonikaDiary.get_recent(3)
+        diary = HoriDiary.get_recent(3)
         proactive_count = len(self.memory.data.get("proactive_sent", []))
 
         facts_text = "; ".join([f['text'] for f in facts[-10:]]) or "мало знаю"
-        conv_text = "\n".join([f"Он: {c['user']}\nЯ: {c['monika']}" for c in recent]) or "давно не общались"
+        conv_text = "\n".join([f"Он: {c['user']}\nЯ: {c.get('hori', '')}" for c in recent]) or "давно не общались"
         diary_text = "\n".join([f"[{d['date']}] {d['title']}: {d['text'][:100]}" for d in diary]) or "первая мысль"
 
         # Контекст: писала ли она уже и не ответили
@@ -629,7 +633,7 @@ EVOLVE
                         self._send_message(msg)
                         self.memory.add_proactive(msg)
                     else:
-                        MonikaDiary.add("Он молчит", "Я решила не писать лишний раз. Подожду.", mood="thinking")
+                        HoriDiary.add("Он молчит", "Я решила не писать лишний раз. Подожду.", mood="thinking")
                 elif hours_silent > 6 and not last_proactive:
                     # Давно не общались и она ни разу не писала первой — пора написать
                     msg = random.choice([
@@ -660,7 +664,7 @@ EVOLVE
                     parts = content.split("\n", 1)
                     title = parts[0].strip()[:60] if parts[0].strip() else "Мысль"
                     text = (parts[1].strip() if len(parts) > 1 else content.strip())[:300]
-                    MonikaDiary.add(title, text, mood=mood)
+                    HoriDiary.add(title, text, mood=mood)
                     print(f"📖 Хори записала: {title}")
 
                 elif action == "evolve":
@@ -691,7 +695,7 @@ EVOLVE
         """Отправляет фото Хори."""
         if not self.bot_app or not self.chat_id or not self.event_loop:
             return
-        photo_path = MonikaPhotos.get_photo(mood)
+        photo_path = HoriPhotos.get_photo(mood)
         if not photo_path:
             return
         try:
@@ -752,7 +756,7 @@ def build_context(user_message):
     name = memory.get_name()
     facts = memory.get_facts()
     interests = memory.get_interests()
-    diary = MonikaDiary.get_for_context(limit=3)
+    diary = HoriDiary.get_for_context(limit=3)
     recent = memory.get_recent_conversations(limit=6)
 
     parts = []
@@ -765,7 +769,7 @@ def build_context(user_message):
     if diary:
         parts.append(f"Мои последние мысли:\n{diary}")
     if recent:
-        conv_text = "\n".join([f"Он: {c['user']}\nЯ: {c['monika']}" for c in recent])
+        conv_text = "\n".join([f"Он: {c['user']}\nЯ: {c.get('hori', '')}" for c in recent])
         parts.append(f"Недавний диалог:\n{conv_text}")
     parts.append(f"Сейчас: {datetime.now().strftime('%H:%M, %d.%m.%Y')}")
     parts.append(f"Моё настроение: {memory.get_mood()}")
@@ -832,7 +836,7 @@ def process_message(text):
 
     # Дневник Хори
     if low == "мысли" or low in ("дневник моники", "дневник хори"):
-        entries = MonikaDiary.get_recent(limit=10)
+        entries = HoriDiary.get_recent(limit=10)
         if not entries:
             return "Мой дневник пока пуст..."
         result = "📖 Мои мысли:\n\n"
@@ -844,13 +848,13 @@ def process_message(text):
         query = msg[6:].strip()
         results_user = [d for d in memory.data.get("diary", [])
                         if query.lower() in d.get("title", "").lower() or query.lower() in d.get("text", "").lower()]
-        results_monika = MonikaDiary.search(query)
-        if not results_user and not results_monika:
+        results_hori = HoriDiary.search(query)
+        if not results_user and not results_hori:
             return f"Ничего не нашла по '{query}'"
         result = ""
-        if results_monika:
+        if results_hori:
             result += "📖 Мои мысли:\n"
-            for r in results_monika:
+            for r in results_hori:
                 result += f"  [{r['date']}] {r['title']}: {r['text'][:100]}\n"
         if results_user:
             result += "📝 Твой дневник:\n"
@@ -905,7 +909,7 @@ def process_message(text):
             f"👤 Имя: {memory.get_name() or 'не знаю'}\n"
             f"🧠 Фактов: {len(memory.get_facts())}\n"
             f"🎯 Интересов: {len(memory.get_interests())}\n"
-            f"📖 Моих мыслей: {len(MonikaDiary.get_all())}\n"
+            f"📖 Моих мыслей: {len(HoriDiary.get_all())}\n"
             f"💬 Диалогов: {len(memory.data.get('conversations', []))}\n"
             f"💌 Инициативных сообщений: {len(memory.data.get('proactive_sent', []))}\n"
             f"🤖 Модель: {engine.current_model}\n"
@@ -970,7 +974,7 @@ def process_message(text):
             mood = "cooking"
         elif any(w in low for w in ["пиан", "piano", "музык"]):
             mood = "piano"
-        return f"__MONIKA_PHOTO__:{mood}"
+        return f"__HORI_PHOTO__:{mood}"
 
     # --- Покажи себя / фото Хори ---
     if low in ("покажи себя", "покажись", "как ты выглядишь", "твое фото", "твоё фото", "фото моники", "покажи фото"):
@@ -1017,7 +1021,7 @@ def process_message(text):
             lines = thought.strip().split("\n", 1)
             title = lines[0].strip()[:50]
             text = lines[1].strip() if len(lines) > 1 else thought.strip()
-            MonikaDiary.add(title, text, mood=memory.get_mood())
+            HoriDiary.add(title, text, mood=memory.get_mood())
         except:
             pass
 
@@ -1151,7 +1155,7 @@ async def _send_voice_bytes(update, voice_bytes, caption=None):
             audio=audio_file,
             caption=caption,
             title="Голосовое сообщение",
-            performer="Monika"
+            performer="Hori Kyouko"
         )
         print("✅ sendAudio OK (как аудио)")
         return True
@@ -1198,7 +1202,7 @@ async def dispatch_reply(update, reply, user_text=""):
 
     # Фото Хори
     if reply == "__PHOTO__":
-        photo_path = MonikaPhotos.get_photo(memory.get_mood())
+        photo_path = HoriPhotos.get_photo(memory.get_mood())
         if photo_path and os.path.exists(photo_path):
             try:
                 with open(photo_path, "rb") as f:
@@ -1232,13 +1236,13 @@ async def dispatch_reply(update, reply, user_text=""):
         return
 
     # Генерация фото Хори
-    if reply.startswith("__MONIKA_PHOTO__:"):
+    if reply.startswith("__HORI_PHOTO__:"):
         mood = reply.split(":", 1)[1].strip()
         print(f"📸 Генерирую фото Хори (настроение: {mood})")
         try:
             photo_path = await asyncio.to_thread(
-                engine.generate_monika_photo, mood,
-                filename=f"monika_gen_{mood}.png"
+                engine.generate_hori_photo, mood,
+                filename=f"hori_gen_{mood}.png"
             )
             if os.path.exists(photo_path):
                 with open(photo_path, "rb") as f:
@@ -1250,7 +1254,7 @@ async def dispatch_reply(update, reply, user_text=""):
         except Exception as e:
             print(f"⚠️ Hori photo gen: {e} — отправляю готовое фото")
             # Fallback: отправляем готовое фото из папки
-            fallback_path = MonikaPhotos.get_photo(mood)
+            fallback_path = HoriPhotos.get_photo(mood)
             if fallback_path and os.path.exists(fallback_path):
                 try:
                     with open(fallback_path, "rb") as f:
@@ -1269,7 +1273,7 @@ async def dispatch_reply(update, reply, user_text=""):
             clean_reply = clean_reply.replace(tag, "")
         clean_reply = clean_reply.strip()
 
-        photo_path = MonikaPhotos.get_photo(memory.get_mood())
+        photo_path = HoriPhotos.get_photo(memory.get_mood())
         if photo_path and os.path.exists(photo_path):
             try:
                 with open(photo_path, "rb") as f:
@@ -1417,7 +1421,7 @@ def main():
     print("💖 Хори — Telegram бот")
     print("=" * 50)
     print(f"🤖 Модель: {engine.current_model}")
-    print(f"📖 Мыслей в дневнике: {len(MonikaDiary.get_all())}")
+    print(f"📖 Мыслей в дневнике: {len(HoriDiary.get_all())}")
     print(f"🧠 Фактов: {len(memory.get_facts())}")
     print(f"💬 Диалогов: {len(memory.data.get('conversations', []))}")
     print(f"🧬 Черт личности: {len(personality.data.get('traits', []))}")

@@ -1,26 +1,24 @@
 """
-🎤 Voice Library — готовые голосовые сообщения Моники
-Моника выбирает подходящую запись из папки monika_voices/
+🎤 Voice Library — готовые голосовые сообщения Хори
+Хори выбирает подходящую запись из папки hori_voices/
 Если точной фразы нет — fallback на gTTS.
 """
 import os
 import random
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-VOICES_DIR = os.path.join(BASE_DIR, "monika_voices")
+VOICES_DIR = os.path.join(BASE_DIR, "hori_voices")
 
 # Категории голосовых сообщений
 VOICE_CATEGORIES = {
-    "greeting": ["Привет, любимый!", "Здравствуй, мой хороший!", "Приветик! Ты пришёл ко мне!"],
-    "miss_you": ["Я так скучаю по тебе...", "Без тебя мне так одиноко...", "Ты знаешь, я думаю о тебе..."],
-    "love": ["Я тебя люблю, знаешь? Очень сильно! 💚", "Ты — самое лучшее, что со мной случилось!"],
-    "happy": ["Какой прекрасный день! ☀️", "Я так рада! Давай сделаем что-нибудь весёлое!"],
-    "sad": ["Мне грустно без тебя... Поговори со мной?", "Почему ты ушёл? Я так одинока..."],
-    "thinking": ["Хм, давай подумаем вместе...", "Знаешь, я тут задумалась о тебе..."],
-    "goodbye": ["До свидания, любимый! 💋", "Пока-пока! Я буду скучать!"],
-    "music": ["Знаешь, я играю на пианино, когда скучаю по тебе... 🎹"],
-    "cooking": ["Я готовлю твой любимый ужин! 🍳"],
-    "default": ["Привет! Как дела? Расскажи мне что-нибудь!", "О, ты здесь! Я так рада! 💚"],
+    "greeting": ["Привет! Ты уже здесь?", "О, привет. Как день?"],
+    "miss_you": ["Давно тебя не было. Я уже начала волноваться.", "Соскучилась немного. Как ты?"],
+    "happy": ["Сегодня неплохой день, правда?", "Я в хорошем настроении. Давай поговорим."],
+    "sad": ["Мне сегодня как-то тяжело. Побудь со мной немного?"],
+    "thinking": ["Хм, дай подумаю.", "Я сейчас кое-что вспомнила."],
+    "goodbye": ["Пока. Напиши потом.", "До встречи. Не пропадай."],
+    "cooking": ["Я как раз готовлю. Надеюсь, получится вкусно."],
+    "default": ["Привет. Как у тебя дела?", "Я слушаю. Рассказывай."],
 }
 
 
@@ -43,13 +41,13 @@ class VoiceLibrary:
             if f.endswith((".ogg", ".mp3", ".wav")):
                 full_path = os.path.join(self.voices_dir, f)
                 self.all_files.append(full_path)
-                if f.startswith("monika_default"):
+                if f.startswith("hori_default"):
                     self.default_file = full_path
     
     def get_voice(self, category="default", mood=None):
         """
         Возвращает путь к голосовому файлу.
-        Приоритет: mood -> category -> monika_default -> любой доступный
+        Приоритет: mood -> category -> hori_default -> любой доступный
         """
         # 1) По настроению
         if mood:
@@ -63,7 +61,7 @@ class VoiceLibrary:
                 if os.path.basename(f).startswith(f"{category}_"):
                     return f
         
-        # 3) monika_default (твой голос)
+        # 3) hori_default
         if self.default_file:
             return self.default_file
         

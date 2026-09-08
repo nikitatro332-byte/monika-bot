@@ -12,7 +12,7 @@ r = requests.post(
         "api_key": API_KEY,
         "format": "json",
         "id": MONITOR_ID,
-        "friendly_name": "Monika Bot",
+        "friendly_name": "Hori Bot",
         "url": "https://monika-bot-pqn5.onrender.com",
         "interval": "300",
     },

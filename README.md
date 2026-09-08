@@ -1,4 +1,4 @@
-# Моника — 3D ИИ-помощник и Telegram бот
+# Хори Кёко — 3D ИИ-помощник и Telegram бот
 
 ## Локальный запуск (Windows)
 
@@ -43,9 +43,10 @@ python model_viewer.py
 | `telegram_bot.py` | Telegram бот с ИИ, памятью, дневником |
 | `ai_module.py` | Единый ИИ-модуль (Groq, Gemini, OpenRouter, xAI) |
 | `model_viewer.py` | 3D просмотрщик (PyQt6 + Three.js) |
-| `monika_memory.json` | Память о пользователе (факты, диалоги) |
-| `monika_personality.json` | Личность Моники (саморазвивающаяся) |
-| `monika_diary.json` | Личный дневник Моники |
+| `hori_memory.json` | Память о пользователе (факты, диалоги) |
+| `hori_personality.json` | Личность Хори (саморазвивающаяся) |
+| `hori_diary.json` | Личный дневник Хори |
+| `hori_photos/` | Оригинальные изображения Хори по настроению |
 | `xray/` | Xray-core прокси (VLESS, для РФ) |
 | `render.yaml` | Конфиг деплоя на Render |
 | `requirements.txt` | Python зависимости |

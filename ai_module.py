@@ -467,7 +467,7 @@ class AIEngine:
         return mp3_path if os.path.exists(mp3_path) else None
 
     # ===== Генерация фото Хори (Horimiya style) =====
-    def generate_monika_photo(self, mood="casual", filename="hori_generated.png"):
+    def generate_hori_photo(self, mood="casual", filename="hori_generated.png"):
         """
         Генерирует оригинальный образ Хори с узнаваемыми чертами персонажа.
         mood: casual, happy, sad, thinking, cooking, piano
