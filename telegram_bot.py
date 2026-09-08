@@ -280,6 +280,7 @@ class Personality:
         identity = "\n".join([f"- {item}" for item in d.get("identity_anchors", [])])
         speech_patterns = "\n".join([f"- {item}" for item in style.get("speech_patterns", [])])
         knowledge = json.dumps(HORI_KNOWLEDGE, ensure_ascii=False, indent=2)[:5000]
+        source_policy = HORI_KNOWLEDGE.get("response_guidance", {}).get("source_policy", {})
         examples = """
     ПРИМЕРЫ МАНЕРЫ (не цитируй их дословно):
     Пользователь: Я устал.
@@ -301,8 +302,13 @@ class Personality:
     ЗНАНИЯ О ТВОЁМ МИРЕ:
     {knowledge}
 
+    ПОЛИТИКА ИСТОЧНИКОВ:
+    - Для вопросов о каноне, сюжете, персонажах, внешности и отношениях сначала используй проверку Wikipedia.
+    - Основная ссылка: {source_policy.get('primary', WIKI_URL)}
+    - Не придумывай факт, если источник не подтверждает его. В сомнении скажи, что не уверена.
+
 ТВОЯ ВНЕШНОСТЬ:
-    У тебя длинные чёрные волосы, обычно распущенные, карие глаза. В школе ты носишь форму, а дома предпочитаешь удобную повседневную одежду. Ты умеешь заботиться о доме и готовить, но не превращай каждый ответ в описание внешности.
+    У тебя длинные каштановые волосы, аккуратная чёлка, янтарно-карие глаза и маленькие заколки-крестики в волосах. В школе ты носишь форму с белой рубашкой и красной лентой, а дома предпочитаешь простую удобную одежду без яркого макияжа. Ты умеешь заботиться о доме и готовить, но не превращай каждый ответ в описание внешности.
 
 ТВОЯ ЛИЧНОСТЬ:
 - Черты характера: {traits}
@@ -796,6 +802,45 @@ memory = Memory()
 personality = Personality()
 mind = Mind(engine, memory, personality)
 
+WIKI_URL = HORI_KNOWLEDGE.get("response_guidance", {}).get("source_policy", {}).get(
+    "primary", "https://en.wikipedia.org/wiki/Horimiya"
+)
+WIKI_TERMS = (
+    "хори", "кёко", "хориимия", "horimiya", "миямура", "изуми",
+    "сюжет", "канон", "персонаж", "эпизод", "манга", "аниме", "внешност",
+)
+_wiki_cache = {}
+
+
+def get_wikipedia_context(user_message):
+    """Проверяет фактологические вопросы по Wikipedia, не замедляя обычный чат."""
+    query = (user_message or "").strip()
+    if not any(term in query.lower() for term in WIKI_TERMS):
+        return ""
+    cache_key = query.lower()
+    if cache_key in _wiki_cache:
+        source = _wiki_cache[cache_key]
+    else:
+        try:
+            source = engine.wikipedia_summary("Horimiya", language="en")
+        except Exception as error:
+            print(f"⚠️ Wikipedia недоступна: {error}")
+            try:
+                source = engine.wikipedia_summary("Хоримия", language="ru")
+            except Exception as fallback_error:
+                print(f"⚠️ Wikipedia fallback недоступен: {fallback_error}")
+                source = None
+        _wiki_cache[cache_key] = source
+    if not source:
+        return "Источник Wikipedia не дал результата. Не выдавай неподтвержденные сведения за факт."
+    return (
+        "ПРОВЕРКА ИСТОЧНИКА WIKIPEDIA:\n"
+        f"Заголовок: {source['title']}\n"
+        f"Материал: {source['extract']}\n"
+        f"Ссылка: {source['url']}\n"
+        "Используй этот материал только для проверки фактов и не копируй текст дословно."
+    )
+
 
 # =====================================================
 # 🧠 КОНТЕКСТ ДЛЯ ИИ
@@ -826,6 +871,7 @@ def build_context(user_message):
     knowledge_summary = HORI_KNOWLEDGE.get("character", {})
     parts.append("Короткая справка о Хори: " + json.dumps(knowledge_summary, ensure_ascii=False))
     parts.append("Важно: старые записи диалогов и дневника — только история. Не перенимай из них имя, личность или язык старого персонажа.")
+    parts.append(f"Основной источник по канону: {WIKI_URL}")
 
     return "\n\n".join(parts)
 
@@ -989,6 +1035,9 @@ def process_message(text):
         engine.reset_history()
         return "Очистила контекст. Но дневник и факты помню!"
 
+    if low in ("источник", "источники", "вики", "wiki"):
+        return f"По каноническим фактам я сверяюсь с Wikipedia: {WIKI_URL}"
+
     # --- Поиск в интернете ---
     if low.startswith("найди в интернете ") or low.startswith("поиск "):
         query = msg[18:].strip() if low.startswith("найди в интернете ") else msg[6:].strip()
@@ -1042,7 +1091,10 @@ def process_message(text):
         return "__VOICE__"
 
     # --- Разговор через ИИ ---
+    wiki_context = get_wikipedia_context(msg)
     context = build_context(msg)
+    if wiki_context:
+        context += "\n\n" + wiki_context
     engine.set_system(personality.get_prompt() + "\n\nКОНТЕКСТ:\n" + context)
 
     try:

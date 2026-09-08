@@ -23,7 +23,6 @@ import time
 import socket
 import sys
 import uuid
-import hashlib
 from secrets_loader import get_secret
 
 # =====================================================
@@ -482,9 +481,10 @@ class AIEngine:
         mood = mood if mood in self.HORI_PHOTO_SEEDS else "casual"
         base_desc = (
             "Hori Kyouko from Horimiya, recognizable 2D anime character, "
-            "long straight dark brown hair with neat bangs, warm brown eyes, "
+            "long straight chestnut brown hair with neat bangs, amber-brown eyes, "
+            "small cross-shaped hair clips on her bangs, "
             "Japanese high school girl, slim natural proportions, expressive face, "
-            "Horimiya anime cel-shaded style, clean lineart, flat 2D illustration, "
+            "Horimiya anime screenshot, hand-drawn 2D cel-shaded style, clean lineart, flat illustration, "
             "not photorealistic, not Monika, not Doki Doki Literature Club, not a generic character"
         )
         scenes = {
@@ -498,6 +498,39 @@ class AIEngine:
         scene_text = scene.strip() or scenes[mood]
         return f"{base_desc}, {scene_text}, high quality anime frame"
 
+    def wikipedia_summary(self, query, language="ru"):
+        """Возвращает краткий материал Wikipedia для проверки канонических фактов."""
+        from urllib.parse import quote
+
+        query = (query or "").strip()
+        if not query:
+            return None
+        headers = {
+            "User-Agent": "HoriBot/1.0 (personal research assistant; contact via Telegram bot)"
+        }
+        search_url = (
+            f"https://{language}.wikipedia.org/w/api.php"
+            f"?action=query&list=search&srsearch={quote(query)}&format=json&utf8=1&srlimit=1"
+        )
+        response = requests.get(search_url, headers=headers, timeout=12, proxies=PROXY)
+        response.raise_for_status()
+        results = response.json().get("query", {}).get("search", [])
+        if not results:
+            return None
+        title = results[0].get("title", "")
+        summary_url = f"https://{language}.wikipedia.org/api/rest_v1/page/summary/{quote(title)}"
+        summary_response = requests.get(summary_url, headers=headers, timeout=12, proxies=PROXY)
+        summary_response.raise_for_status()
+        data = summary_response.json()
+        extract = data.get("extract", "").strip()
+        if not extract:
+            return None
+        return {
+            "title": title,
+            "extract": extract[:2500],
+            "url": data.get("content_urls", {}).get("desktop", {}).get("page", summary_url),
+        }
+
     def generate_hori_photo(self, mood="casual", filename="hori_generated.png"):
         """
         Генерирует оригинальную иллюстрацию Хори Кёко из Horimiya.
@@ -506,6 +539,11 @@ class AIEngine:
         prompt = self.build_hori_photo_prompt(mood)
         from urllib.parse import quote
         encoded = quote(prompt)
+        negative_prompt = quote(
+            "photorealistic, live action, realistic skin, 3d render, western cartoon, "
+            "bad anatomy, extra fingers, extra limbs, blurry, low quality, generic girl, "
+            "Monika, Doki Doki Literature Club"
+        )
         seed = self.HORI_PHOTO_SEEDS.get(mood, self.HORI_PHOTO_SEEDS["casual"])
         base_dir = os.path.dirname(os.path.abspath(__file__))
         out_path = os.path.join(base_dir, filename)
@@ -513,6 +551,7 @@ class AIEngine:
         url = (
             f"https://image.pollinations.ai/prompt/{encoded}"
             f"?width=512&height=768&nologo=true&seed={seed}"
+            f"&negative_prompt={negative_prompt}"
         )
         r = requests.get(url, timeout=120, proxies=PROXY)
         r.raise_for_status()
