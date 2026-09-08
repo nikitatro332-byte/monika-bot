@@ -23,6 +23,7 @@ import time
 import socket
 import sys
 import uuid
+import hashlib
 from secrets_loader import get_secret
 
 # =====================================================
@@ -467,45 +468,45 @@ class AIEngine:
         return mp3_path if os.path.exists(mp3_path) else None
 
     # ===== Генерация фото Хори (Horimiya style) =====
+    HORI_PHOTO_SEEDS = {
+        "casual": 24117,
+        "happy": 24118,
+        "sad": 24119,
+        "thinking": 24120,
+        "cooking": 24121,
+        "piano": 24122,
+    }
+
+    def build_hori_photo_prompt(self, mood="casual", scene=""):
+        """Собирает стабильный промпт Хори; меняется только сцена и эмоция."""
+        mood = mood if mood in self.HORI_PHOTO_SEEDS else "casual"
+        base_desc = (
+            "Hori Kyouko from Horimiya, recognizable 2D anime character, "
+            "long straight dark brown hair with neat bangs, warm brown eyes, "
+            "Japanese high school girl, slim natural proportions, expressive face, "
+            "Horimiya anime cel-shaded style, clean lineart, flat 2D illustration, "
+            "not photorealistic, not Monika, not Doki Doki Literature Club, not a generic character"
+        )
+        scenes = {
+            "casual": "at home after school, relaxed small smile, comfortable clothes",
+            "happy": "bright smile after meeting a close friend, lively gesture, warm daylight",
+            "sad": "quietly worried by a window, restrained emotion, soft evening light",
+            "thinking": "thinking in a classroom after lessons, serious but gentle expression",
+            "cooking": "wearing a simple apron and cooking homemade dinner in her kitchen",
+            "piano": "at home doing ordinary household work, focused expression, warm natural light",
+        }
+        scene_text = scene.strip() or scenes[mood]
+        return f"{base_desc}, {scene_text}, high quality anime frame"
+
     def generate_hori_photo(self, mood="casual", filename="hori_generated.png"):
         """
         Генерирует оригинальную иллюстрацию Хори Кёко из Horimiya.
         mood: casual, happy, sad, thinking, cooking, piano
         """
-        base_desc = (
-            "Hori Kyouko from Horimiya, recognizable 2D anime character design, "
-            "Japanese high school girl, long straight very dark brown hair with neat bangs, warm brown eyes, "
-            "slim natural build, expressive confident face, Horimiya anime cel-shaded illustration style, "
-            "white school shirt with red ribbon and dark school uniform, or simple comfortable home clothes, "
-            "slice-of-life Japanese setting, clean anime lineart, faithful character proportions, "
-            "flat cel shading, illustrated 2D frame, not photorealistic, not Monika, "
-            "not Doki Doki Literature Club, not a generic character"
-        )
-
-        prompts = {
-            "casual": (
-                f"{base_desc}, Hori at home after school, relaxed posture, natural small smile, soft indoor light"
-            ),
-            "happy": (
-                f"{base_desc}, Hori smiling brightly after meeting a close friend, lively gesture, warm daylight"
-            ),
-            "sad": (
-                f"{base_desc}, Hori quietly worried, looking down by a window, restrained emotion, soft evening light"
-            ),
-            "thinking": (
-                f"{base_desc}, Hori thinking in a classroom after lessons, serious but gentle expression, soft light"
-            ),
-            "cooking": (
-                f"{base_desc}, Hori in a simple apron cooking homemade dinner in her kitchen, warm cozy lighting"
-            ),
-            "piano": (
-                f"{base_desc}, Hori at home doing ordinary household work, focused expression, warm natural light"
-            )
-        }
-        prompt = prompts.get(mood, prompts["casual"])
+        prompt = self.build_hori_photo_prompt(mood)
         from urllib.parse import quote
         encoded = quote(prompt)
-        seed = int(time.time()) % 1000000
+        seed = self.HORI_PHOTO_SEEDS.get(mood, self.HORI_PHOTO_SEEDS["casual"])
         base_dir = os.path.dirname(os.path.abspath(__file__))
         out_path = os.path.join(base_dir, filename)
         # Без model=flux — Pollinations надёжно генерирует только базовой моделью

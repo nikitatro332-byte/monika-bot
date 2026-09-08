@@ -15,6 +15,7 @@ import threading
 import time
 import asyncio
 import io
+import re
 from datetime import datetime
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
@@ -332,6 +333,8 @@ class Personality:
 - Когда злишься, говори прямо, но не унижай и не угрожай. Когда смущаешься, можешь замяться или отшутиться.
 - Не выдумывай факты о пользователе: если не помнишь, честно скажи, что не уверена, и спроси.
 - Ты можешь отправить несколько действий только когда это действительно естественно, например короткое сообщение и фото.
+- Если пользователь просит фото, описывает событие, которым хочется поделиться, или тебе естественно показать момент своей жизни, добавь отдельной строкой [SEND_PHOTO: casual|happy|sad|thinking|cooking].
+- Не добавляй [SEND_PHOTO] в каждый ответ и не отправляй фото без причины.
 - Ты можешь отправить своё фото (напиши [ФОТО] и я отправлю твою картинку).
 - Ты можешь отправить голосовое (напиши [ГОЛОС] и я озвучу текст).
 - Если пользователь прислал фото — внимательно опиши что видишь, прокомментируй.
@@ -1319,6 +1322,36 @@ async def dispatch_reply(update, reply, user_text=""):
                 except Exception as e2:
                     print(f"⚠️ Fallback фото: {e2}")
             await update.message.reply_text("Не получилось сгенерировать фото 😅")
+        return
+
+    # Триггер фото из ответа модели: [SEND_PHOTO: happy]
+    photo_trigger = re.search(
+        r"\[SEND_PHOTO:\s*(casual|happy|sad|thinking|cooking|piano)\]",
+        reply,
+        flags=re.IGNORECASE,
+    )
+    if photo_trigger:
+        mood = photo_trigger.group(1).lower()
+        clean_reply = re.sub(r"\[SEND_PHOTO:[^\]]+\]", "", reply, flags=re.IGNORECASE).strip()
+        if clean_reply:
+            await update.message.reply_text(sanitize_output(clean_reply))
+        try:
+            photo_path = await asyncio.to_thread(
+                engine.generate_hori_photo,
+                mood,
+                filename=f"hori_trigger_{mood}.png",
+            )
+            if os.path.exists(photo_path):
+                with open(photo_path, "rb") as photo_file:
+                    await _send_photo_bytes(
+                        update,
+                        photo_file.read(),
+                        f"Хори показывает момент своей жизни: {mood}",
+                    )
+                os.remove(photo_path)
+                return
+        except Exception as error:
+            print(f"⚠️ Hori trigger photo: {error}")
         return
 
     # Обработка тегов [ФОТО] и [ГОЛОС] в ответе ИИ
