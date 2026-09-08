@@ -16,5 +16,7 @@ services:
         sync: false
       - key: OPENROUTER_API_KEY
         sync: false
+      - key: XAI_API_KEY
+        sync: false
     healthCheckPath: /
     autoDeploy: true

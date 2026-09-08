@@ -20,6 +20,7 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 from ai_module import AIEngine, MODELS
+from secrets_loader import get_secret
 from voice_library import voice_library
 
 # =====================================================
@@ -28,7 +29,7 @@ from voice_library import voice_library
 KEEP_ALIVE_PORT = int(os.environ.get("PORT", 10000))
 
 def start_keep_alive():
-    from http.server import HTTPServer, BaseHTTPRequestHandler
+    from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
@@ -39,7 +40,8 @@ def start_keep_alive():
         def log_message(self, *args):
             pass
 
-    server = HTTPServer(("0.0.0.0", KEEP_ALIVE_PORT), Handler)
+    server = ThreadingHTTPServer(("0.0.0.0", KEEP_ALIVE_PORT), Handler)
+    server.daemon_threads = True
     t = threading.Thread(target=server.serve_forever, daemon=True)
     t.start()
     print(f"🌐 Keep-alive сервер на порту {KEEP_ALIVE_PORT}")
@@ -47,7 +49,7 @@ def start_keep_alive():
 # =====================================================
 # 🔑 ТОКЕН БОТА
 # =====================================================
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "8508533554:AAHcZNo44TOIwOE9p-TMH4svF66AkdA1yPM")
+BOT_TOKEN = get_secret("BOT_TOKEN")
 
 # =====================================================
 # 🧠 ИИ ДВИЖОК
@@ -1412,8 +1414,8 @@ def main():
     print(f"🧬 Черт личности: {len(personality.data.get('traits', []))}")
     print(f"🔄 Эволюций: {personality.data.get('evolution_count', 0)}")
 
-    if BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
-        print("\n❌ ВСТАВЬ ТОКЕН БОТА!")
+    if not BOT_TOKEN:
+        print("\n❌ Не найден BOT_TOKEN. Добавь его в переменные окружения или файл 'ключи апи'.")
         return
 
     start_keep_alive()

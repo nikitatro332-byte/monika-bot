@@ -23,15 +23,16 @@ import time
 import socket
 import sys
 import uuid
+from secrets_loader import get_secret
 
 # =====================================================
 # 🔑 КЛЮЧИ
 # =====================================================
 
-XAI_API_KEY    = os.environ.get("XAI_API_KEY", "xai-wlr7wOJMrUtHO82avCn2dKYmiw5PWPv7kQCPzpSzu6bcMoINerOi4LLLULE0CB6oz1ACE52vjHLJT7MZ")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AQ.Ab8RN6KWiCNI3vK-4CgFLR9XLnkwWpmc5fvl1rLICg2S8u5aAg")
-GROQ_API_KEY   = os.environ.get("GROQ_API_KEY", "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")
-OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "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")
+XAI_API_KEY = get_secret("XAI_API_KEY")
+GEMINI_API_KEY = get_secret("GEMINI_API_KEY")
+GROQ_API_KEY = get_secret("GROQ_API_KEY")
+OPENROUTER_API_KEY = get_secret("OPENROUTER_API_KEY")
 
 # =====================================================
 # 🌐 ПРОКСИ (Xray VLESS → SOCKS5)
