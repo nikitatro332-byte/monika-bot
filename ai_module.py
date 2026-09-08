@@ -428,8 +428,8 @@ class AIEngine:
         return r.json().get("text", "")
 
     # ===== TTS (gTTS natural → fallback) =====
-    async def tts_realistic(self, text, filename=None, as_ogg=True):
-        """Генерирует голос через gTTS с естественной скоростью."""
+    async def tts_realistic(self, text, filename=None, as_ogg=True, emotion="calm"):
+        """Генерирует русский голос с простой эмоциональной настройкой темпа."""
         safe_name = filename or f"voice_{uuid.uuid4().hex}"
         base_dir = os.path.dirname(os.path.abspath(__file__))
         mp3_path = os.path.join(base_dir, f"{safe_name}.mp3")
@@ -439,7 +439,7 @@ class AIEngine:
         try:
             from gtts import gTTS
             clean_text = text.replace("\n", " ").replace("\r", " ")
-            tts = gTTS(text=clean_text, lang="ru", tld="com", slow=True)
+            tts = gTTS(text=clean_text, lang="ru", tld="com", slow=emotion in ("sad", "thinking"))
             tts.save(mp3_path)
             if not os.path.exists(mp3_path) or os.path.getsize(mp3_path) < 500:
                 raise Exception("gTTS вернул пустой файл")
@@ -534,12 +534,13 @@ class ModelBehavior:
         self.engine.set_system(
             "Ты — Хори Кёко из Horimiya, живой анимированный персонаж. "
             "Отвечай только на русском и коротко (1-2 предложения). "
-            "В конце ответа добавь [анимация: idle|wave|dance|happy] "
-            "чтобы выбрать анимацию. Пример: 'Привет! Я так рада тебя видеть! [анимация: wave]'"
+            "В конце ответа добавь один тег [анимация: idle|wave|dance|happy] "
+            "и один тег [эмоция: calm|happy|sad|angry|thinking]. "
+            "Пример: 'Привет! Рада тебя видеть. [анимация: wave] [эмоция: happy]'"
         )
 
     def react(self, user_input):
-        """Возвращает (текст, анимация)."""
+        """Возвращает (текст, анимация, эмоция)."""
         reply = self.engine.chat(user_input, max_tokens=150, temperature=0.9)
 
         # Парсим анимацию из ответа
@@ -551,7 +552,15 @@ class ModelBehavior:
                 reply = reply.replace(tag, "").replace(tag.capitalize(), "").strip()
                 break
 
-        return reply, anim
+        emotion = "calm"
+        for candidate in ["happy", "sad", "angry", "thinking", "calm"]:
+            tag = f"[эмоция: {candidate}]"
+            if tag in reply.lower():
+                emotion = candidate
+                reply = reply.replace(tag, "").strip()
+                break
+
+        return reply, anim, emotion
 
 
 # =====================================================
@@ -592,6 +601,7 @@ if __name__ == "__main__":
 
     print("🎭 Тест ModelBehavior:")
     behavior = ModelBehavior()
-    text, anim = behavior.react("Привет, Хори!")
+    text, anim, emotion = behavior.react("Привет, Хори!")
     print(f"  Текст: {text}")
     print(f"  Анимация: {anim}")
+    print(f"  Эмоция: {emotion}")

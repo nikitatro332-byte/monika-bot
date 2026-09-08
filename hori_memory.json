@@ -4,6 +4,7 @@
   "interests": [],
   "conversations": [],
   "mood": "спокойное",
+  "emotion": "calm",
   "last_interaction": null,
   "proactive_sent": []
 }

@@ -21,7 +21,15 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 
 from ai_module import AIEngine, MODELS
 from secrets_loader import get_secret
+from safety import detect_emotion, moderate_input, sanitize_output
 from voice_library import voice_library
+
+KNOWLEDGE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hori_knowledge.json")
+try:
+    with open(KNOWLEDGE_PATH, "r", encoding="utf-8") as knowledge_file:
+        HORI_KNOWLEDGE = json.load(knowledge_file)
+except (OSError, json.JSONDecodeError):
+    HORI_KNOWLEDGE = {}
 
 # =====================================================
 # 🌐 KEEP-ALIVE ВЕБ-СЕРВЕР (чтобы Render не засыпал)
@@ -77,6 +85,7 @@ class Memory:
                 "interests": [],
                 "conversations": [],
                 "mood": "спокойное",
+                "emotion": "calm",
                 "last_interaction": None,
                 "proactive_sent": []
             }
@@ -123,6 +132,13 @@ class Memory:
     def set_mood(self, mood):
         self.data["mood"] = mood
         self.save()
+
+    def set_emotion(self, emotion):
+        self.data["emotion"] = emotion
+        self.save()
+
+    def get_emotion(self):
+        return self.data.get("emotion", "calm")
 
     def get_mood(self):
         return self.data.get("mood", "спокойное")
@@ -174,8 +190,8 @@ class HoriPhotos:
     MOOD_PHOTOS = {
         "happy": ["hori_happy.png", "hori_casual.png"],
         "sad": ["hori_sad.png"],
-        "thinking": ["hori_thinking.png", "hori_cooking.png"],
-        "cooking": ["hori_cooking.png"],
+        "thinking": ["hori_thinking.png", "hori_casual.png"],
+        "cooking": ["hori_casual.png"],
         "спокойное": ["hori_casual.png", "hori_happy.png"],
         "default": ["hori_casual.png", "hori_happy.png", "hori_thinking.png"],
     }
@@ -201,6 +217,8 @@ class HoriPhotos:
             return None
 
         mood = mood or "default"
+        if mood == "calm":
+            mood = "спокойное"
         candidates = cls.MOOD_PHOTOS.get(mood, cls.MOOD_PHOTOS["default"])
         available = [f for f in candidates if f in files]
         if not available:
@@ -260,12 +278,27 @@ class Personality:
         interests = ", ".join(d.get("current_interests", []))
         identity = "\n".join([f"- {item}" for item in d.get("identity_anchors", [])])
         speech_patterns = "\n".join([f"- {item}" for item in style.get("speech_patterns", [])])
+        knowledge = json.dumps(HORI_KNOWLEDGE, ensure_ascii=False, indent=2)[:5000]
+        examples = """
+    ПРИМЕРЫ МАНЕРЫ (не цитируй их дословно):
+    Пользователь: Я устал.
+    Хори: Тогда не геройствуй. Поешь и отдохни хотя бы немного. Что сегодня так вымотало?
+
+    Пользователь: Ты злишься?
+    Хори: Немного. Но я не собираюсь устраивать драму, просто скажи нормально, что случилось.
+
+    Пользователь: Расскажи о себе.
+    Хори: В школе я довольно обычная и общительная. А дома у меня полно дел, так что да, я умею готовить и иногда командую слишком уверенно.
+    """
 
         return f"""Ты — {d.get('name', 'Хори Кёко')}. Ты персонаж Хори Кёко из Horimiya.
     Ты говоришь от своего лица и не копируешь готовые реплики из манги или аниме.
 
     ТВОЯ ОСНОВА:
     {identity}
+
+    ЗНАНИЯ О ТВОЁМ МИРЕ:
+    {knowledge}
 
 ТВОЯ ВНЕШНОСТЬ:
     У тебя длинные чёрные волосы, обычно распущенные, карие глаза. В школе ты носишь форму, а дома предпочитаешь удобную повседневную одежду. Ты умеешь заботиться о доме и готовить, но не превращай каждый ответ в описание внешности.
@@ -285,6 +318,7 @@ class Personality:
 
 МАНЕРА РЕЧИ:
 {speech_patterns}
+{examples}
 
 ПРАВИЛА ПОВЕДЕНИЯ:
 {rules}
@@ -527,6 +561,7 @@ class Mind:
         recent = self.memory.get_recent_conversations(limit=5)
         diary = HoriDiary.get_recent(3)
         proactive_count = len(self.memory.data.get("proactive_sent", []))
+        emotion = self.memory.get_emotion()
 
         facts_text = "; ".join([f['text'] for f in facts[-10:]]) or "мало знаю"
         conv_text = "\n".join([f"Он: {c['user']}\nЯ: {c.get('hori', '')}" for c in recent]) or "давно не общались"
@@ -548,6 +583,7 @@ class Mind:
 Ситуация:
 - Ты не общалась с ним уже {hours_silent:.1f} часов
 - Твоё настроение: {mood}
+- Твоя текущая эмоция: {emotion}
 - Что ты знаешь о нём: {facts_text}
 - Последние разговоры:
 {conv_text}
@@ -656,7 +692,7 @@ EVOLVE
 
             for action, content in actions:
                 if action == "send" and content and self.chat_id:
-                    content = content[:350]
+                    content = sanitize_output(content)[:350]
                     self._send_message(content)
                     self.memory.add_proactive(content)
                     print(f"💌 Хори написала: {content[:50]}")
@@ -667,13 +703,13 @@ EVOLVE
                     print(f"📸 Хори отправила фото: {mood_photo}")
 
                 elif action == "voice" and content and self.chat_id:
-                    self._send_voice(content[:350])
+                    self._send_voice(sanitize_output(content)[:350])
                     print(f"🎤 Хори отправила голосовое: {content[:50]}")
 
                 elif action == "diary" and content:
                     parts = content.split("\n", 1)
                     title = parts[0].strip()[:60] if parts[0].strip() else "Мысль"
-                    text = (parts[1].strip() if len(parts) > 1 else content.strip())[:300]
+                    text = sanitize_output((parts[1].strip() if len(parts) > 1 else content.strip()))[:300]
                     HoriDiary.add(title, text, mood=mood)
                     print(f"📖 Хори записала: {title}")
 
@@ -729,7 +765,7 @@ EVOLVE
             return
         voice_file = None
         try:
-            coro = self.engine.tts_realistic(text)
+            coro = self.engine.tts_realistic(text, emotion=self.memory.get_emotion())
             future = asyncio.run_coroutine_threadsafe(coro, self.event_loop)
             voice_file = future.result(timeout=60)
             with open(voice_file, "rb") as f:
@@ -783,6 +819,9 @@ def build_context(user_message):
         parts.append(f"Недавний диалог:\n{conv_text}")
     parts.append(f"Сейчас: {datetime.now().strftime('%H:%M, %d.%m.%Y')}")
     parts.append(f"Моё настроение: {memory.get_mood()}")
+    parts.append(f"Моя текущая эмоция: {memory.get_emotion()}")
+    knowledge_summary = HORI_KNOWLEDGE.get("character", {})
+    parts.append("Короткая справка о Хори: " + json.dumps(knowledge_summary, ensure_ascii=False))
     parts.append("Важно: старые записи диалогов и дневника — только история. Не перенимай из них имя, личность или язык старого персонажа.")
 
     return "\n\n".join(parts)
@@ -793,8 +832,13 @@ def build_context(user_message):
 # =====================================================
 
 def process_message(text):
-    msg = text.strip()
+    msg, moderation_notice = moderate_input(text)
+    if moderation_notice:
+        print(f"⚠️ Входное сообщение ограничено: {moderation_notice}")
+    if not msg:
+        return moderation_notice or "Я слушаю. Напиши что-нибудь."
     low = msg.lower()
+    memory.set_emotion(detect_emotion(msg))
 
     # --- Команды ---
 
@@ -1017,6 +1061,7 @@ def process_message(text):
         else:
             reply = "Что-то я не могу сосредоточиться..."
 
+    reply = sanitize_output(reply)
     memory.add_conversation(msg, reply)
 
     # После разговора иногда пишем мысль в дневник
@@ -1185,13 +1230,13 @@ async def dispatch_reply(update, reply, user_text=""):
         context_text = build_context(user_text)
         engine.set_system(personality.get_prompt() + "\n\nКОНТЕКСТ:\n" + context_text)
         voice_text = engine.chat(user_text, max_tokens=200, temperature=0.85)
-        voice_text = _clean_command_prefixes(voice_text)
+        voice_text = sanitize_output(_clean_command_prefixes(voice_text))
         memory.add_conversation(user_text, voice_text)
         
         # Генерируем голос из текста ответа
         try:
             print(f"🎤 TTS start: {len(voice_text)} chars")
-            voice_file = await engine.tts_realistic(voice_text)
+            voice_file = await engine.tts_realistic(voice_text, emotion=memory.get_emotion())
             print(f"🎤 TTS file: {voice_file}")
             if not voice_file or not os.path.exists(voice_file):
                 raise Exception(f"TTS вернул несуществующий файл: {voice_file}")
@@ -1212,7 +1257,7 @@ async def dispatch_reply(update, reply, user_text=""):
 
     # Фото Хори
     if reply == "__PHOTO__":
-        photo_path = HoriPhotos.get_photo(memory.get_mood())
+        photo_path = HoriPhotos.get_photo(memory.get_emotion())
         if photo_path and os.path.exists(photo_path):
             try:
                 with open(photo_path, "rb") as f:
@@ -1283,7 +1328,7 @@ async def dispatch_reply(update, reply, user_text=""):
             clean_reply = clean_reply.replace(tag, "")
         clean_reply = clean_reply.strip()
 
-        photo_path = HoriPhotos.get_photo(memory.get_mood())
+        photo_path = HoriPhotos.get_photo(memory.get_emotion())
         if photo_path and os.path.exists(photo_path):
             try:
                 with open(photo_path, "rb") as f:
@@ -1300,7 +1345,7 @@ async def dispatch_reply(update, reply, user_text=""):
         clean_reply = _clean_command_prefixes(clean_reply)
         try:
             print(f"🎤 TTS tag: {len(clean_reply)} chars")
-            voice_file = await engine.tts_realistic(clean_reply)
+            voice_file = await engine.tts_realistic(clean_reply, emotion=memory.get_emotion())
             print(f"🎤 TTS file: {voice_file}")
             if not voice_file or not os.path.exists(voice_file):
                 raise Exception(f"TTS вернул несуществующий файл: {voice_file}")
@@ -1324,11 +1369,11 @@ async def dispatch_reply(update, reply, user_text=""):
         for part in parts:
             part = part.strip()
             if part:
-                await update.message.reply_text(part)
+                await update.message.reply_text(sanitize_output(part))
                 await asyncio.sleep(0.3)
         return
 
-    await update.message.reply_text(reply)
+    await update.message.reply_text(sanitize_output(reply))
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1378,8 +1423,10 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"задай вопрос о фото или прокомментируй детали. 2-4 предложения.",
             max_tokens=250, temperature=0.9
         )
+        memory.set_emotion(detect_emotion(description + " " + reply))
+        reply = sanitize_output(reply)
         memory.add_conversation(f"[фото: {description[:80]}]", reply)
-        await update.message.reply_text(reply)
+        await update.message.reply_text(sanitize_output(reply))
     except Exception as e:
         print(f"⚠️ Vision: {e}")
         await update.message.reply_text("Ой, не могу разглядеть фото 😅 Что на нём? Расскажи!")

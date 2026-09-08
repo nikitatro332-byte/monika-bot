@@ -46,7 +46,9 @@ python model_viewer.py
 | `hori_memory.json` | Память о пользователе (факты, диалоги) |
 | `hori_personality.json` | Личность Хори (саморазвивающаяся) |
 | `hori_diary.json` | Личный дневник Хори |
+| `hori_knowledge.json` | Факты о Хори и мире Horimiya |
 | `hori_photos/` | Оригинальные изображения Хори по настроению |
+| `safety.py` | Фильтрация входных и выходных сообщений, определение эмоций |
 | `xray/` | Xray-core прокси (VLESS, для РФ) |
 | `render.yaml` | Конфиг деплоя на Render |
 | `requirements.txt` | Python зависимости |
