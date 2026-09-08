@@ -1316,21 +1316,19 @@ async def dispatch_reply(update, reply, user_text=""):
 
     # Фото Хори
     if reply == "__PHOTO__":
-        photo_path = HoriPhotos.get_photo(memory.get_emotion())
-        if photo_path and os.path.exists(photo_path):
-            try:
-                with open(photo_path, "rb") as f:
-                    photo_bytes = f.read()
-                print(f"📸 Отправляю фото: {photo_path} ({len(photo_bytes)} bytes)")
-                await _send_photo_bytes(update, photo_bytes, "Это я 💚 Как я выгляжу?")
-                return
-            except Exception as e:
-                print(f"⚠️ Ошибка отправки фото: {e}")
-        else:
-            print(f"⚠️ Фото не найдено: {photo_path}")
-        await update.message.reply_text(
-            "Точное фото Хори пока не настроено. Нужен Stable Diffusion с LoRA или разрешённый reference image."
-        )
+        mood = memory.get_emotion()
+        try:
+            photo_path = await asyncio.to_thread(
+                engine.generate_hori_photo,
+                mood,
+                filename=f"hori_selfie_{mood}.png",
+            )
+            with open(photo_path, "rb") as photo_file:
+                await _send_photo_bytes(update, photo_file.read(), "Это я. Ну, как тебе?" )
+            os.remove(photo_path)
+        except Exception as error:
+            print(f"⚠️ Ошибка генерации селфи: {error}")
+            await update.message.reply_text("Не получилось сгенерировать моё фото. Попробую ещё раз позже.")
         return
 
     # Генерация картинки

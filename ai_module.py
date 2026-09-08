@@ -551,12 +551,42 @@ class AIEngine:
                     filename,
                 )
             except Exception as error:
-                raise RuntimeError(f"Stable Diffusion недоступен: {error}") from error
+                print(f"⚠️ Stable Diffusion недоступен: {error} — использую автономную генерацию")
 
-        raise RuntimeError(
-            "Точное фото Хори не настроено: добавь SD_WEBUI_URL и LoRA/reference image. "
-            "Случайные изображения без идентификации персонажа отключены."
+        # Автономный режим: генерируем оригинальную иллюстрацию по фиксированному
+        # описанию Хори, если локальный SD WebUI не подключен.
+        from urllib.parse import quote
+        encoded = quote(prompt)
+        negative_prompt = quote(
+            "photorealistic, live action, realistic skin, 3d render, western cartoon, "
+            "bad anatomy, extra fingers, extra limbs, blurry, low quality, generic girl, "
+            "wrong hair color, wrong eye color, Monika, Doki Doki Literature Club"
         )
+        seed = self.HORI_PHOTO_SEEDS.get(mood, self.HORI_PHOTO_SEEDS["casual"])
+        out_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), filename)
+        url = (
+            f"https://image.pollinations.ai/prompt/{encoded}"
+            f"?width=512&height=768&nologo=true&seed={seed}"
+            f"&negative_prompt={negative_prompt}"
+        )
+        response = requests.get(url, timeout=120, proxies=PROXY)
+        if response.status_code >= 500:
+            compact_prompt = quote(
+                "Hori Kyouko from Horimiya, 2D anime cel shading, long chestnut brown hair, "
+                "amber brown eyes, cross hair clips, Japanese school uniform, "
+                f"{mood} expression, clean hand-drawn lineart"
+            )
+            compact_url = (
+                f"https://image.pollinations.ai/prompt/{compact_prompt}"
+                f"?width=512&height=768&nologo=true&seed={seed}"
+            )
+            response = requests.get(compact_url, timeout=120, proxies=PROXY)
+        response.raise_for_status()
+        if len(response.content) < 1000:
+            raise RuntimeError("Облачный генератор вернул пустое изображение")
+        with open(out_path, "wb") as output_file:
+            output_file.write(response.content)
+        return out_path
 
     def _generate_hori_with_webui(self, base_url, prompt, mood, filename):
         """Генерирует Hori через Automatic1111/Forge API с LoRA или reference image."""
