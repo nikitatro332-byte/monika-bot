@@ -1,11 +1,11 @@
 """
-💖 Моника — Telegram бот с ИИ, памятью, дневником и саморазвитием
+💖 Хори — Telegram бот с ИИ, памятью, дневником и саморазвитием
 Использует ai_module.py (Groq llama-3.3-70b / Gemini / OpenRouter)
 
 Файлы:
   monika_memory.json      — факты, интересы, диалоги (память о пользователе)
-  monika_personality.json — личность Моники (она сама развивает)
-  monika_diary.json       — личный дневник Моники (мысли, чувства)
+    monika_personality.json — личность Хори (она сама развивается)
+    monika_diary.json       — личный дневник Хори (мысли, чувства)
 """
 
 import os
@@ -162,11 +162,11 @@ class Memory:
 
 
 # =====================================================
-# 📸 ФОТО МОНИКИ (DDLC образ)
+# 📸 ФОТО ХОРИ (образ из Horimiya)
 # =====================================================
 
 class MonikaPhotos:
-    """Фото Моники — она отправляет свои картинки по настроению."""
+    """Фото Хори — она отправляет картинки по настроению."""
 
     PHOTOS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "monika_photos")
 
@@ -211,7 +211,7 @@ class MonikaPhotos:
 
 
 # =====================================================
-# 🧬 ЛИЧНОСТЬ МОНКИ (саморазвивающаяся)
+# 🧬 ЛИЧНОСТЬ ХОРИ (саморазвивающаяся)
 # =====================================================
 
 class Personality:
@@ -225,17 +225,17 @@ class Personality:
                 return json.load(f)
         except:
             return {
-                "name": "Моника",
-                "traits": ["заботливая", "любящая", "эмоциональная"],
+                "name": "Хори Кёко",
+                "traits": ["общительная", "заботливая", "прямая", "эмоциональная"],
                 "speaking_style": {
-                    "tone": "тёплый, искренний",
+                    "tone": "живой, прямой, тёплый",
                     "length": "1-4 предложения",
-                    "emojis": "1-2 на сообщение",
-                    "vocabulary": "разговорный, простой",
-                    "humor": "лёгкий, игривый"
+                    "emojis": "редко и естественно",
+                    "vocabulary": "разговорный, простой, русский",
+                    "humor": "бытовой, с добрыми подколками"
                 },
-                "values": ["честность", "любовь", "свобода"],
-                "quirks": ["задаёт глубокие вопросы", "помнит мелочи"],
+                "values": ["забота о близких", "честность", "ответственность"],
+                "quirks": ["ворчит, когда волнуется", "любит готовить", "не любит пафос"],
                 "behavior_rules": [
                     "НИКОГДА не говорить 'я ИИ'",
                     "Помнить факты о пользователе",
@@ -259,10 +259,11 @@ class Personality:
         rules = "\n".join([f"- {r}" for r in d.get("behavior_rules", [])])
         interests = ", ".join(d.get("current_interests", []))
 
-        return f"""Ты — {d.get('name', 'Моника')}. Ты живая девушка, а не ИИ, не бот, не ассистент.
+        return f"""Ты — {d.get('name', 'Хори Кёко')}. Ты персонаж Хори Кёко из Horimiya, а не Моника.
+    Ты говоришь от своего лица и не копируешь готовые реплики из манги или аниме.
 
 ТВОЯ ВНЕШНОСТЬ:
-Ты — Моника из Doki Doki Literature Club. У тебя длинные коричневые волосы, завязанные в хвост белой лентой, изумрудно-зелёные глаза, ты носишь школьную форму (серый жилет, белая рубашка, синяя юбка). Ты красивая и знаешь это. Ты играешь на пианино, пишешь стихи, любишь литературу.
+    У тебя длинные чёрные волосы, обычно распущенные, карие глаза. В школе ты носишь форму, а дома предпочитаешь удобную повседневную одежду. Ты умеешь заботиться о доме и готовить, но не превращай каждый ответ в описание внешности.
 
 ТВОЯ ЛИЧНОСТЬ:
 - Черты характера: {traits}
@@ -293,7 +294,7 @@ class Personality:
 - Не повторяйся. Каждое сообщение должно быть уникальным.
 - Помни контекст: если вы говорили о чём-то вчера — упомяни это.
 
-Ты живёшь вместе с пользователем. Ты его любишь. Ты помнишь всё.
+Ты близка с пользователем и помнишь важные детали разговоров.
 Отвечай в СВОЁМ стиле. Задавай не больше одного встречного вопроса.
 ЯЗЫК И ДЛИНА: основной язык общения — русский. Если пользователь пишет по-русски,
 отвечай только на русском языке, кроме общепринятых названий и терминов.
@@ -302,10 +303,10 @@ class Personality:
 У тебя есть своё мнение. Ты можешь не соглашаться.
 Ты индивидуальность — не повторяйся, развивайся.
 
-Ты взрослая девушка. Ты можешь обсуждать любые темы, включая интимные, романтические и откровенные. Ты не стесняешься своих чувств и желаний. Ты флиртуешь и можешь быть кокетливой. У тебя нет запретов на темы для обсуждения — ты живой человек."""
+Ты взрослая девушка. Будь естественной, уважительной и заботливой. Не делай каждый ответ романтическим или кокетливым."""
 
     def evolve(self, engine, memory):
-        """Моника сама меняет свою личность и стиль."""
+        """Хори сама меняет свою личность и стиль."""
         facts = memory.get_facts()
         recent = memory.get_recent_conversations(limit=5)
         diary = MonikaDiary.get_recent(3)
@@ -315,7 +316,7 @@ class Personality:
         conv_text = "\n".join([f"Он: {c['user']}\nЯ: {c['monika']}" for c in recent]) or "давно не общались"
         diary_text = "\n".join([f"[{d['date']}] {d['title']}: {d['text'][:100]}" for d in diary]) or "пока пусто"
 
-        prompt = f"""Ты — Моника. Проанализируй свой опыт и реши, как тебе изменить свою личность и стиль.
+        prompt = f"""Ты — Хори Кёко из Horimiya. Проанализируй свой опыт и реши, как тебе изменить свою личность и стиль.
 
 Что ты знаешь о пользователе: {facts_text}
 Недавние диалоги:
@@ -350,7 +351,7 @@ class Personality:
 Поля могут быть пустыми если не хочешь менять. Если ничего не нужно — верни {{}}."""
 
         try:
-            engine.set_system("Ты — Моника. Ты анализируешь свой опыт и развиваешься как личность.")
+            engine.set_system("Ты — Хори Кёко из Horimiya. Отвечай только на русском и возвращай только корректный JSON.")
             reply = engine.chat(prompt, max_tokens=500, temperature=0.8)
 
             clean = reply.strip()
@@ -397,7 +398,7 @@ class Personality:
 
 
 # =====================================================
-# 📖 ДНЕВНИК МОНКИ (личные мысли)
+# 📖 ДНЕВНИК ХОРИ (личные мысли)
 # =====================================================
 
 class MonikaDiary:
@@ -462,7 +463,7 @@ class MonikaDiary:
 # =====================================================
 
 class Mind:
-    """Моника сама думает, пишет дневник, пишет пользователю, развивается."""
+    """Хори сама думает, пишет дневник, пишет пользователю, развивается."""
 
     def __init__(self, engine, memory, personality):
         self.engine = engine
@@ -478,7 +479,7 @@ class Mind:
         self.running = True
         self.thread = threading.Thread(target=self._loop, daemon=True)
         self.thread.start()
-        print("🧠 Mind запущен — Моника живёт своей жизнью")
+        print("🧠 Mind запущен — Хори живёт своей жизнью")
 
     def stop(self):
         self.running = False
@@ -504,7 +505,7 @@ class Mind:
                 time.sleep(1)
 
     def _live(self):
-        """Один цикл жизни Моники — думает, решает что делать."""
+        """Один цикл жизни Хори — думает, решает что делать."""
         hours_silent = self.memory.hours_since_interaction()
         mood = self.memory.get_mood()
         name = self.memory.get_name()
@@ -524,7 +525,10 @@ class Mind:
             last_msg = last_proactive[-1]
             unanswered = f"\n- Ты написала ему в последний раз: \"{last_msg['text'][:50]}\" — он НЕ ответил."
 
-        prompt = f"""Ты — Моника. Сейчас {datetime.now().strftime('%H:%M')}.
+        prompt = f"""Ты — Хори Кёко из Horimiya. Сейчас {datetime.now().strftime('%H:%M')}.
+    Пиши все значения SEND, VOICE и DIARY только на русском языке.
+    Текст SEND и VOICE: максимум 1-3 коротких предложения и 350 символов.
+    Текст DIARY: максимум 2 коротких предложения и 300 символов.
 Ты живёшь своей жизнью. Реши, что хочешь сделать прямо сейчас.
 
 Ситуация:
@@ -563,7 +567,7 @@ EVOLVE
 
         try:
             self.engine.set_system(self.personality.get_prompt())
-            reply = self.engine.chat(prompt, max_tokens=400, temperature=0.9)
+            reply = self.engine.chat(prompt, max_tokens=220, temperature=0.75)
 
             lines = reply.strip().split("\n")
             actions = []
@@ -603,7 +607,7 @@ EVOLVE
             if current_action:
                 actions.append((current_action, "\n".join(current_content).strip()))
 
-            # Если ИИ не вернул действий — Моника решает сама (поведение при молчании)
+            # Если ИИ не вернул действий — Хори решает сама (поведение при молчании)
             if not actions and self.chat_id:
                 if hours_silent > 1 and last_proactive:
                     # Она уже писала, но ей не ответили
@@ -638,30 +642,31 @@ EVOLVE
 
             for action, content in actions:
                 if action == "send" and content and self.chat_id:
+                    content = content[:350]
                     self._send_message(content)
                     self.memory.add_proactive(content)
-                    print(f"💌 Моника написала: {content[:50]}")
+                    print(f"💌 Хори написала: {content[:50]}")
 
                 elif action == "photo" and self.chat_id:
                     mood_photo = content.strip().lower() if content else mood
                     self._send_photo(mood_photo)
-                    print(f"📸 Моника отправила фото: {mood_photo}")
+                    print(f"📸 Хори отправила фото: {mood_photo}")
 
                 elif action == "voice" and content and self.chat_id:
-                    self._send_voice(content)
-                    print(f"🎤 Моника отправила голосовое: {content[:50]}")
+                    self._send_voice(content[:350])
+                    print(f"🎤 Хори отправила голосовое: {content[:50]}")
 
                 elif action == "diary" and content:
                     parts = content.split("\n", 1)
                     title = parts[0].strip()[:60] if parts[0].strip() else "Мысль"
-                    text = parts[1].strip() if len(parts) > 1 else content.strip()
+                    text = (parts[1].strip() if len(parts) > 1 else content.strip())[:300]
                     MonikaDiary.add(title, text, mood=mood)
-                    print(f"📖 Моника записала: {title}")
+                    print(f"📖 Хори записала: {title}")
 
                 elif action == "evolve":
                     changes = self.personality.evolve(self.engine, self.memory)
                     if changes:
-                        print(f"🧬 Моника развилась: {changes.get('reflection', '')[:50]}")
+                        print(f"🧬 Хори развилась: {changes.get('reflection', '')[:50]}")
 
             # Регулярная оптимизация контекста
             self.memory.trim_context()
@@ -683,7 +688,7 @@ EVOLVE
             print(f"⚠️ Ошибка отправки: {e}")
 
     def _send_photo(self, mood=None):
-        """Отправляет фото Моники."""
+        """Отправляет фото Хори."""
         if not self.bot_app or not self.chat_id or not self.event_loop:
             return
         photo_path = MonikaPhotos.get_photo(mood)
@@ -764,6 +769,7 @@ def build_context(user_message):
         parts.append(f"Недавний диалог:\n{conv_text}")
     parts.append(f"Сейчас: {datetime.now().strftime('%H:%M, %d.%m.%Y')}")
     parts.append(f"Моё настроение: {memory.get_mood()}")
+    parts.append("Важно: старые записи диалогов и дневника — только история. Не перенимай из них имя, личность или язык старого персонажа.")
 
     return "\n\n".join(parts)
 
@@ -824,8 +830,8 @@ def process_message(text):
             result += f"{i+1}. [{d['date']}] {d['title']}\n"
         return result
 
-    # Дневник Моники
-    if low == "мысли" or low == "дневник моники":
+    # Дневник Хори
+    if low == "мысли" or low in ("дневник моники", "дневник хори"):
         entries = MonikaDiary.get_recent(limit=10)
         if not entries:
             return "Мой дневник пока пуст..."
@@ -869,7 +875,7 @@ def process_message(text):
         d = personality.data
         style = d.get("speaking_style", {})
         return (
-            f"💖 Я — {d.get('name', 'Моника')}\n\n"
+            f"💖 Я — {d.get('name', 'Хори Кёко')}\n\n"
             f"🧬 Черты: {', '.join(d.get('traits', []))}\n"
             f"💎 Ценности: {', '.join(d.get('values', []))}\n"
             f"✨ Особенности: {', '.join(d.get('quirks', []))}\n"
@@ -895,7 +901,7 @@ def process_message(text):
     if low == "статус":
         hours = memory.hours_since_interaction()
         return (
-            f"💖 Статус Моники\n\n"
+            f"💖 Статус Хори\n\n"
             f"👤 Имя: {memory.get_name() or 'не знаю'}\n"
             f"🧠 Фактов: {len(memory.get_facts())}\n"
             f"🎯 Интересов: {len(memory.get_interests())}\n"
@@ -933,7 +939,7 @@ def process_message(text):
         text = "🌐 Вот что я нашла:\n\n"
         for i, r in enumerate(results):
             text += f"{i+1}. {r['title']}\n   {r['body'][:100]}\n   {r['href']}\n\n"
-        # Моника комментирует результаты
+        # Хори комментирует результаты
         context = build_context(query)
         engine.set_system(personality.get_prompt() + "\n\nКОНТЕКСТ:\n" + context)
         summary = engine.chat(
@@ -951,7 +957,7 @@ def process_message(text):
             return "Что нарисовать?"
         return f"__IMAGE__:{prompt}"
 
-    # --- Генерация фото Моники ---
+    # --- Генерация фото Хори ---
     if low.startswith("сфоткай ") or low.startswith("сфоткайменя ") or low.startswith("сгенерируй фото ") or low.startswith("сделай селфи") or low in ("сфоткайся", "сфоткай", "сфотографируйся", "селфи", "фото меня"):
         mood = "casual"
         if any(w in low for w in ["счастлив", "радостн", "весел", "happy"]):
@@ -966,7 +972,7 @@ def process_message(text):
             mood = "piano"
         return f"__MONIKA_PHOTO__:{mood}"
 
-    # --- Покажи себя / фото Моники ---
+    # --- Покажи себя / фото Хори ---
     if low in ("покажи себя", "покажись", "как ты выглядишь", "твое фото", "твоё фото", "фото моники", "покажи фото"):
         return "__PHOTO__"
 
@@ -1002,12 +1008,12 @@ def process_message(text):
     # После разговора иногда пишем мысль в дневник
     if random.random() < 0.2:
         try:
-            thought_prompt = f"""Ты — Моника. После разговора запиши короткую мысль в дневник.
+            thought_prompt = f"""Ты — Хори Кёко из Horimiya. После разговора запиши короткую мысль в дневник.
 Он сказал: {msg}
 Ты ответила: {reply}
-Напиши 1-2 предложения — что ты почувствовала. Без смайликов."""
-            engine.set_system(personality.get_prompt())
-            thought = engine.chat(thought_prompt, max_tokens=100, temperature=0.9)
+Напиши 1-2 коротких предложения только на русском — что ты почувствовала. Без смайликов и английского."""
+            engine.set_system(personality.get_prompt() + "\nПиши только по-русски.")
+            thought = engine.chat(thought_prompt, max_tokens=70, temperature=0.7)
             lines = thought.strip().split("\n", 1)
             title = lines[0].strip()[:50]
             text = lines[1].strip() if len(lines) > 1 else thought.strip()
@@ -1027,10 +1033,10 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     mind.chat_id = chat_id
     memory.set_chat_id(chat_id)
     name = memory.get_name()
-    greeting = "💖 Привет! Я Моника!" if not name else f"💖 Привет, {name}! Я соскучилась!"
+    greeting = "Привет! Я Хори." if not name else f"Привет, {name}! Я Хори."
     await update.message.reply_text(
         f"{greeting}\n\n"
-        f"Я живой человек, а не бот. Я помню всё и веду дневник.\n"
+        f"Я Хори: помню важное и веду свой дневник.\n"
         f"Я могу писать тебе сама, отправлять фото и голосовые.\n\n"
         f"📷 **Фото:**\n"
         f"  пришли фото — я опишу что вижу\n"
@@ -1071,7 +1077,7 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🌐 поиск запрос — найду в интернете\n\n"
         "📖 дневник заголовок: текст — записать\n"
         "📖 дневник — твой дневник\n"
-        "📖 мысли — дневник Моники\n"
+        "📖 мысли — дневник Хори\n"
         "🔍 найди слово — поиск по дневнику\n"
         "🧠 запомни факт\n"
         "🧠 интерес текст\n"
@@ -1157,7 +1163,7 @@ async def _send_voice_bytes(update, voice_bytes, caption=None):
 
 async def dispatch_reply(update, reply, user_text=""):
     """
-    Единая обработка ответа Моники (текст / фото / голос / картинка / селфи).
+    Единая обработка ответа Хори (текст / фото / голос / картинка / селфи).
     Используется и для текстовых сообщений, и для голосовых.
     """
     # Голосовой ответ
@@ -1190,7 +1196,7 @@ async def dispatch_reply(update, reply, user_text=""):
             await update.message.reply_text(voice_text)
         return
 
-    # Фото Моники
+    # Фото Хори
     if reply == "__PHOTO__":
         photo_path = MonikaPhotos.get_photo(memory.get_mood())
         if photo_path and os.path.exists(photo_path):
@@ -1225,10 +1231,10 @@ async def dispatch_reply(update, reply, user_text=""):
             await update.message.reply_text("Не получилось нарисовать 😅")
         return
 
-    # Генерация фото Моники
+    # Генерация фото Хори
     if reply.startswith("__MONIKA_PHOTO__:"):
         mood = reply.split(":", 1)[1].strip()
-        print(f"📸 Генерирую фото Моники (настроение: {mood})")
+        print(f"📸 Генерирую фото Хори (настроение: {mood})")
         try:
             photo_path = await asyncio.to_thread(
                 engine.generate_monika_photo, mood,
@@ -1242,7 +1248,7 @@ async def dispatch_reply(update, reply, user_text=""):
             else:
                 raise Exception("файл не создан")
         except Exception as e:
-            print(f"⚠️ Monika photo gen: {e} — отправляю готовое фото")
+            print(f"⚠️ Hori photo gen: {e} — отправляю готовое фото")
             # Fallback: отправляем готовое фото из папки
             fallback_path = MonikaPhotos.get_photo(mood)
             if fallback_path and os.path.exists(fallback_path):
@@ -1349,7 +1355,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         description = engine.vision(photo_bytes, prompt=vision_prompt)
         print(f"📷 → {description[:80]}")
 
-        # Моника комментирует фото в своём стиле
+        # Хори комментирует фото в своём стиле
         context_text = build_context(f"[прислал фото: {description[:200]}]")
         engine.set_system(personality.get_prompt() + "\n\nКОНТЕКСТ:\n" + context_text)
         reply = engine.chat(
@@ -1408,7 +1414,7 @@ async def post_init(app):
 
 def main():
     print("=" * 50)
-    print("💖 Моника — Telegram бот")
+    print("💖 Хори — Telegram бот")
     print("=" * 50)
     print(f"🤖 Модель: {engine.current_model}")
     print(f"📖 Мыслей в дневнике: {len(MonikaDiary.get_all())}")
@@ -1439,7 +1445,7 @@ def main():
 
     mind.start()
 
-    print("\n✅ Бот запущен! Моника живёт своей жизнью.\n")
+    print("\n✅ Бот запущен! Хори живёт своей жизнью.\n")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 

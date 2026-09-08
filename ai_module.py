@@ -312,7 +312,7 @@ class AIEngine:
                 "Authorization": f"Bearer {OPENROUTER_API_KEY}",
                 "Content-Type": "application/json",
                 "HTTP-Referer": "https://github.com/nikitatro332-byte/monika-bot",
-                "X-Title": "Monika Bot"
+                "X-Title": "Hori Bot"
             },
             json={"model": full_name, "messages": msgs, "max_tokens": max_tokens, "temperature": temperature},
             timeout=60, proxies=PROXY
@@ -466,18 +466,16 @@ class AIEngine:
 
         return mp3_path if os.path.exists(mp3_path) else None
 
-    # ===== Генерация фото Моники (DDLC style) =====
-    def generate_monika_photo(self, mood="casual", filename="monika_generated.png"):
+    # ===== Генерация фото Хори (Horimiya style) =====
+    def generate_monika_photo(self, mood="casual", filename="hori_generated.png"):
         """
-        Генерирует фото Моники в стиле DDLC с точным промптом.
+        Генерирует оригинальный образ Хори с узнаваемыми чертами персонажа.
         mood: casual, happy, sad, thinking, cooking, piano
         """
         base_desc = (
-            "young woman, 18 years old, 2D anime / visual novel style, "
-            "long coral-brown hair, high ponytail tied with a large white bow, "
-            "two long side strands framing her face, big emerald-green eyes, light skin, slim build, "
-            "school uniform: white shirt, brown vest, grey-blue blazer, blue pleated skirt, red ribbon at collar, "
-            "black thigh-high stockings, white-pink school slippers, Doki Doki Literature Club aesthetic"
+            "young adult Japanese woman, 2D anime style, long straight black hair, brown eyes, "
+            "light skin, natural expressive face, school uniform or comfortable home clothes, "
+            "warm slice-of-life atmosphere, detailed clean lineart"
         )
 
         prompts = {
@@ -530,8 +528,8 @@ class ModelBehavior:
     def __init__(self, engine=None):
         self.engine = engine or AIEngine(default_model="gemini-flash-latest")
         self.engine.set_system(
-            "Ты — Моника, живой анимированный персонаж. "
-            "Отвечай коротко (1-2 предложения). "
+            "Ты — Хори Кёко из Horimiya, живой анимированный персонаж. "
+            "Отвечай только на русском и коротко (1-2 предложения). "
             "В конце ответа добавь [анимация: idle|wave|dance|happy] "
             "чтобы выбрать анимацию. Пример: 'Привет! Я так рада тебя видеть! [анимация: wave]'"
         )
@@ -590,6 +588,6 @@ if __name__ == "__main__":
 
     print("🎭 Тест ModelBehavior:")
     behavior = ModelBehavior()
-    text, anim = behavior.react("Привет Моника!")
+    text, anim = behavior.react("Привет, Хори!")
     print(f"  Текст: {text}")
     print(f"  Анимация: {anim}")
