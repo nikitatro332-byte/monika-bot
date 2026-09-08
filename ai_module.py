@@ -551,31 +551,12 @@ class AIEngine:
                     filename,
                 )
             except Exception as error:
-                print(f"⚠️ Stable Diffusion недоступен: {error} — использую Pollinations")
+                raise RuntimeError(f"Stable Diffusion недоступен: {error}") from error
 
-        from urllib.parse import quote
-        encoded = quote(prompt)
-        negative_prompt = quote(
-            "photorealistic, live action, realistic skin, 3d render, western cartoon, "
-            "bad anatomy, extra fingers, extra limbs, blurry, low quality, generic girl, "
-            "Monika, Doki Doki Literature Club"
+        raise RuntimeError(
+            "Точное фото Хори не настроено: добавь SD_WEBUI_URL и LoRA/reference image. "
+            "Случайные изображения без идентификации персонажа отключены."
         )
-        seed = self.HORI_PHOTO_SEEDS.get(mood, self.HORI_PHOTO_SEEDS["casual"])
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        out_path = os.path.join(base_dir, filename)
-        # Без model=flux — Pollinations надёжно генерирует только базовой моделью
-        url = (
-            f"https://image.pollinations.ai/prompt/{encoded}"
-            f"?width=512&height=768&nologo=true&seed={seed}"
-            f"&negative_prompt={negative_prompt}"
-        )
-        r = requests.get(url, timeout=120, proxies=PROXY)
-        r.raise_for_status()
-        if len(r.content) < 1000:
-            raise Exception("Pollinations вернул пустую картинку")
-        with open(out_path, "wb") as f:
-            f.write(r.content)
-        return out_path
 
     def _generate_hori_with_webui(self, base_url, prompt, mood, filename):
         """Генерирует Hori через Automatic1111/Forge API с LoRA или reference image."""

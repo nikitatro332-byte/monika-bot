@@ -183,7 +183,7 @@ class Memory:
 # =====================================================
 
 class HoriPhotos:
-    """Фото Хори — она отправляет картинки по настроению."""
+    """Проверяет только разрешенные пользователем изображения, если они добавлены."""
 
     PHOTOS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hori_photos")
 
@@ -212,7 +212,11 @@ class HoriPhotos:
 
     @classmethod
     def get_photo(cls, mood=None):
-        """Возвращает абсолютный путь к случайному фото под настроение."""
+        """Возвращает разрешенное фото; встроенные случайные картинки отключены."""
+        approved_dir = os.environ.get("HORI_APPROVED_PHOTOS_DIR", "").strip()
+        if not approved_dir:
+            return None
+        cls.PHOTOS_DIR = approved_dir
         files = cls._files()
         if not files:
             return None
@@ -1324,7 +1328,9 @@ async def dispatch_reply(update, reply, user_text=""):
                 print(f"⚠️ Ошибка отправки фото: {e}")
         else:
             print(f"⚠️ Фото не найдено: {photo_path}")
-        await update.message.reply_text("Не могу показать фото сейчас 😅")
+        await update.message.reply_text(
+            "Точное фото Хори пока не настроено. Нужен Stable Diffusion с LoRA или разрешённый reference image."
+        )
         return
 
     # Генерация картинки
@@ -1363,17 +1369,9 @@ async def dispatch_reply(update, reply, user_text=""):
                 raise Exception("файл не создан")
         except Exception as e:
             print(f"⚠️ Hori photo gen: {e} — отправляю готовое фото")
-            # Fallback: отправляем готовое фото из папки
-            fallback_path = HoriPhotos.get_photo(mood)
-            if fallback_path and os.path.exists(fallback_path):
-                try:
-                    with open(fallback_path, "rb") as f:
-                        photo_bytes = f.read()
-                    await _send_photo_bytes(update, photo_bytes, "Это я 💚 (не успела сгенерировать новое)")
-                    return
-                except Exception as e2:
-                    print(f"⚠️ Fallback фото: {e2}")
-            await update.message.reply_text("Не получилось сгенерировать фото 😅")
+            await update.message.reply_text(
+                "Не получилось создать точное фото Хори. Проверь SD_WEBUI_URL, LoRA и reference image."
+            )
         return
 
     # Триггер фото из ответа модели: [SEND_PHOTO: happy]

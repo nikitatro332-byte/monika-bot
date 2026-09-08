@@ -60,7 +60,8 @@ python model_viewer.py
 - `HORI_REFERENCE_IMAGE` — путь к разрешённому эталонному изображению для img2img;
 - `SD_DENOISING` — обычно `0.25-0.4`, чтобы сохранять внешность эталона.
 
-Если `SD_WEBUI_URL` не задан, используется Pollinations как резервный генератор.
+Если `SD_WEBUI_URL` не задан, генерация фото Хори отключена: случайные изображения не используются.
+Разрешённые готовые изображения можно подключить через `HORI_APPROVED_PHOTOS_DIR`.
 | `xray/` | Xray-core прокси (VLESS, для РФ) |
 | `render.yaml` | Конфиг деплоя на Render |
 | `requirements.txt` | Python зависимости |
