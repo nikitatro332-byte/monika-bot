@@ -18,6 +18,7 @@
 import requests
 import json
 import os
+import base64
 import subprocess
 import time
 import socket
@@ -537,6 +538,21 @@ class AIEngine:
         mood: casual, happy, sad, thinking, cooking, piano
         """
         prompt = self.build_hori_photo_prompt(mood)
+        lora_trigger = os.environ.get("HORI_LORA_TRIGGER", "").strip()
+        if lora_trigger:
+            prompt = f"{lora_trigger}, {prompt}"
+        stable_diffusion_url = os.environ.get("SD_WEBUI_URL", "").rstrip("/")
+        if stable_diffusion_url:
+            try:
+                return self._generate_hori_with_webui(
+                    stable_diffusion_url,
+                    prompt,
+                    mood,
+                    filename,
+                )
+            except Exception as error:
+                print(f"⚠️ Stable Diffusion недоступен: {error} — использую Pollinations")
+
         from urllib.parse import quote
         encoded = quote(prompt)
         negative_prompt = quote(
@@ -559,6 +575,51 @@ class AIEngine:
             raise Exception("Pollinations вернул пустую картинку")
         with open(out_path, "wb") as f:
             f.write(r.content)
+        return out_path
+
+    def _generate_hori_with_webui(self, base_url, prompt, mood, filename):
+        """Генерирует Hori через Automatic1111/Forge API с LoRA или reference image."""
+        negative_prompt = (
+            "photorealistic, live action, realistic skin, 3d render, western cartoon, "
+            "bad anatomy, extra fingers, extra limbs, blurry, low quality, generic girl, "
+            "wrong hair color, wrong eye color, Monika, Doki Doki Literature Club"
+        )
+        seed = self.HORI_PHOTO_SEEDS.get(mood, self.HORI_PHOTO_SEEDS["casual"])
+        payload = {
+            "prompt": prompt,
+            "negative_prompt": negative_prompt,
+            "seed": seed,
+            "steps": int(os.environ.get("SD_STEPS", "28")),
+            "cfg_scale": float(os.environ.get("SD_CFG_SCALE", "7")),
+            "width": 512,
+            "height": 768,
+            "sampler_name": os.environ.get("SD_SAMPLER", "DPM++ 2M Karras"),
+        }
+        checkpoint = os.environ.get("SD_MODEL_CHECKPOINT", "").strip()
+        if checkpoint:
+            payload["override_settings"] = {"sd_model_checkpoint": checkpoint}
+
+        reference_path = os.environ.get("HORI_REFERENCE_IMAGE", "").strip()
+        if reference_path and os.path.isfile(reference_path):
+            with open(reference_path, "rb") as reference_file:
+                encoded_reference = base64.b64encode(reference_file.read()).decode("ascii")
+            payload["init_images"] = [encoded_reference]
+            payload["denoising_strength"] = float(os.environ.get("SD_DENOISING", "0.35"))
+            endpoint = f"{base_url}/sdapi/v1/img2img"
+        else:
+            endpoint = f"{base_url}/sdapi/v1/txt2img"
+
+        response = requests.post(endpoint, json=payload, timeout=180, proxies=PROXY)
+        response.raise_for_status()
+        images = response.json().get("images", [])
+        if not images:
+            raise RuntimeError("Stable Diffusion не вернул изображение")
+        image_bytes = base64.b64decode(images[0].split(",", 1)[-1])
+        if len(image_bytes) < 1000:
+            raise RuntimeError("Stable Diffusion вернул пустое изображение")
+        out_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), filename)
+        with open(out_path, "wb") as output_file:
+            output_file.write(image_bytes)
         return out_path
 
 

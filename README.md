@@ -49,6 +49,18 @@ python model_viewer.py
 | `hori_knowledge.json` | Факты о Хори и мире Horimiya |
 | `hori_photos/` | Оригинальные изображения Хори по настроению |
 | `safety.py` | Фильтрация входных и выходных сообщений, определение эмоций |
+
+### Более точная генерация фото
+
+Для максимального сходства можно подключить Automatic1111/Forge:
+
+- `SD_WEBUI_URL` — адрес WebUI API, например `http://127.0.0.1:7860`;
+- `SD_MODEL_CHECKPOINT` — checkpoint Stable Diffusion;
+- `HORI_LORA_TRIGGER` — trigger word установленной LoRA Хори;
+- `HORI_REFERENCE_IMAGE` — путь к разрешённому эталонному изображению для img2img;
+- `SD_DENOISING` — обычно `0.25-0.4`, чтобы сохранять внешность эталона.
+
+Если `SD_WEBUI_URL` не задан, используется Pollinations как резервный генератор.
 | `xray/` | Xray-core прокси (VLESS, для РФ) |
 | `render.yaml` | Конфиг деплоя на Render |
 | `requirements.txt` | Python зависимости |
