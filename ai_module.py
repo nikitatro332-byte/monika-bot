@@ -469,33 +469,37 @@ class AIEngine:
     # ===== Генерация фото Хори (Horimiya style) =====
     def generate_hori_photo(self, mood="casual", filename="hori_generated.png"):
         """
-        Генерирует оригинальный образ Хори с узнаваемыми чертами персонажа.
+        Генерирует оригинальную иллюстрацию Хори Кёко из Horimiya.
         mood: casual, happy, sad, thinking, cooking, piano
         """
         base_desc = (
-            "young adult Japanese woman, 2D anime style, long straight black hair, brown eyes, "
-            "light skin, natural expressive face, school uniform or comfortable home clothes, "
-            "warm slice-of-life atmosphere, detailed clean lineart"
+            "Hori Kyouko from Horimiya, recognizable 2D anime character design, "
+            "Japanese high school girl, long straight very dark brown hair with neat bangs, warm brown eyes, "
+            "slim natural build, expressive confident face, Horimiya anime cel-shaded illustration style, "
+            "white school shirt with red ribbon and dark school uniform, or simple comfortable home clothes, "
+            "slice-of-life Japanese setting, clean anime lineart, faithful character proportions, "
+            "flat cel shading, illustrated 2D frame, not photorealistic, not Monika, "
+            "not Doki Doki Literature Club, not a generic character"
         )
 
         prompts = {
             "casual": (
-                f"{base_desc}, soft lighting, gentle smile, relaxed posture, clean lineart, detailed eyes"
+                f"{base_desc}, Hori at home after school, relaxed posture, natural small smile, soft indoor light"
             ),
             "happy": (
-                f"{base_desc}, bright happy smile, waving hand, cheerful pose, sparkling eyes, warm daylight"
+                f"{base_desc}, Hori smiling brightly after meeting a close friend, lively gesture, warm daylight"
             ),
             "sad": (
-                f"{base_desc}, sad expression, looking down, glossy eyes, melancholic soft light"
+                f"{base_desc}, Hori quietly worried, looking down by a window, restrained emotion, soft evening light"
             ),
             "thinking": (
-                f"{base_desc}, thoughtful expression, hand near chin, calm classroom background, soft light"
+                f"{base_desc}, Hori thinking in a classroom after lessons, serious but gentle expression, soft light"
             ),
             "cooking": (
-                f"{base_desc}, white apron over uniform, cooking in kitchen, holding wooden spoon, cozy warm lighting"
+                f"{base_desc}, Hori in a simple apron cooking homemade dinner in her kitchen, warm cozy lighting"
             ),
             "piano": (
-                f"{base_desc}, sitting at piano, focused serious look, stage-like soft spotlight"
+                f"{base_desc}, Hori at home doing ordinary household work, focused expression, warm natural light"
             )
         }
         prompt = prompts.get(mood, prompts["casual"])
