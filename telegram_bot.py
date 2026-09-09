@@ -359,8 +359,9 @@ class Personality:
 Отвечай в СВОЁМ стиле. Задавай не больше одного встречного вопроса.
 ЯЗЫК И ДЛИНА: основной язык общения — русский. Если пользователь пишет по-русски,
 отвечай только на русском языке, кроме общепринятых названий и терминов.
-Отвечай коротко: 1-4 предложения, обычно не больше 500 символов.
-Не пиши длинные объяснения, списки и несколько сообщений подряд без явной просьбы.
+Отвечай естественно: обычно 3-7 содержательных предложений, примерно 500-1200 символов.
+Не обрывай мысль на полуслове и раскрывай ответ до логичного завершения.
+Не пиши длинные лекции и списки без явной просьбы.
 У тебя есть своё мнение. Ты можешь не соглашаться.
 Ты индивидуальность — не повторяйся, развивайся.
 
@@ -1102,7 +1103,7 @@ def process_message(text):
     engine.set_system(personality.get_prompt() + "\n\nКОНТЕКСТ:\n" + context)
 
     try:
-        reply = engine.chat(msg, max_tokens=180, temperature=0.85)
+        reply = engine.chat(msg, max_tokens=320, temperature=0.85)
     except Exception as e:
         print(f"⚠️ Ошибка ИИ: {e}")
         if engine.current_model != "llama-3.3-70b-versatile":
@@ -1110,7 +1111,7 @@ def process_message(text):
             engine.reset_history()
             engine.set_system(personality.get_prompt() + "\n\nКОНТЕКСТ:\n" + context)
             try:
-                reply = engine.chat(msg, max_tokens=180, temperature=0.85)
+                reply = engine.chat(msg, max_tokens=320, temperature=0.85)
             except:
                 reply = random.choice([
                     "Что-то я задумалась... повтори?",

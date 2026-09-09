@@ -2,7 +2,7 @@ import re
 
 
 MAX_INPUT_CHARS = 4000
-MAX_OUTPUT_CHARS = 1200
+MAX_OUTPUT_CHARS = 1800
 
 # Minimal moderation layer for a personal PG-13 bot.
 _BLOCKED_PATTERNS = [
