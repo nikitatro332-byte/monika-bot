@@ -1,0 +1,6 @@
+{
+  "name": "Хори Кёко — 3D ИИ-помощник",
+  "description": "3D интерактивный ИИ-помощник и компаньон Хори Кёко из Horimiya с Three.js моделью, памятью, личным дневником и диалоговым интеллектом.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,9 +1,0 @@
-python-telegram-bot==22.8
-requests==2.32.3
-pysocks==1.7.1
-gtts==2.5.4
-duckduckgo-search==7.5.4
-Pillow==11.0.0
-beautifulsoup4==4.12.3
-edge-tts==7.0.0
-imageio-ffmpeg==0.6.0
